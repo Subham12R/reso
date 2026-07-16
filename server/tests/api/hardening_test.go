@@ -80,6 +80,36 @@ func TestRouterAddsRequestIDAndSecurityHeaders(t *testing.T) {
 	}
 }
 
+func TestRouterReplacesUnsafeRequestIDsBeforeLogging(t *testing.T) {
+	for _, unsafeID := range []string{"SECRET TOKEN", "SECRET\nTOKEN", strings.Repeat("a", 65)} {
+		t.Run(unsafeID[:6], func(t *testing.T) {
+			var logs bytes.Buffer
+			router := api.NewRouterWithOptions(
+				rooms.NewRoomService(),
+				nil,
+				handlers.MediaConfig{},
+				api.RouterOptions{Logger: slog.New(slog.NewTextHandler(&logs, nil))},
+			)
+			request := httptest.NewRequest(http.MethodGet, "/health", nil)
+			request.Header.Set("X-Request-ID", unsafeID)
+			recorder := httptest.NewRecorder()
+			router.ServeHTTP(recorder, request)
+
+			requestID := recorder.Header().Get("X-Request-ID")
+			decoded, err := hex.DecodeString(requestID)
+			if err != nil || len(decoded) != 16 {
+				t.Fatalf("replacement X-Request-ID = %q, want 16 random bytes encoded as hex", requestID)
+			}
+			if strings.Contains(logs.String(), unsafeID) {
+				t.Fatalf("request log contains unsafe caller ID: %s", logs.String())
+			}
+			if !strings.Contains(logs.String(), requestID) {
+				t.Fatalf("request log does not contain replacement ID %q: %s", requestID, logs.String())
+			}
+		})
+	}
+}
+
 func TestRoomCreationRateLimitUsesRemoteAddrAndReturnsRetryAfter(t *testing.T) {
 	redisClient := &fakeRedis{}
 	router := api.NewRouterWithOptions(rooms.NewRoomService(), nil, handlers.MediaConfig{}, api.RouterOptions{Redis: redisClient})
@@ -161,6 +191,18 @@ func TestRouterBoundsJSONAndValidatesTrimmedUnicodeDisplayNames(t *testing.T) {
 	router.ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusCreated {
 		t.Fatalf("trimmed Unicode name status = %d, want %d", recorder.Code, http.StatusCreated)
+	}
+}
+
+func TestRouterRejectsInvalidUTF8JSON(t *testing.T) {
+	router := api.NewRouter(rooms.NewRoomService(), nil, handlers.MediaConfig{})
+	body := append([]byte(`{"displayName":"`), 0xff)
+	body = append(body, []byte(`"}`)...)
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/rooms", bytes.NewReader(body))
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("invalid UTF-8 status = %d, want %d", recorder.Code, http.StatusBadRequest)
 	}
 }
 

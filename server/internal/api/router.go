@@ -72,6 +72,10 @@ func validateDisplayName(next http.Handler) http.Handler {
 			return
 		}
 		r.Body = io.NopCloser(bytes.NewReader(body))
+		if !utf8.Valid(body) {
+			http.Error(w, "invalid request", http.StatusBadRequest)
+			return
+		}
 		var input struct {
 			DisplayName string `json:"displayName"`
 		}

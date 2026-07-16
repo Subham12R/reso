@@ -23,10 +23,15 @@ type requestIDKey struct{}
 
 type statusWriter struct {
 	http.ResponseWriter
-	status int
+	status      int
+	wroteHeader bool
 }
 
 func (writer *statusWriter) WriteHeader(status int) {
+	if writer.wroteHeader {
+		return
+	}
+	writer.wroteHeader = true
 	writer.status = status
 	writer.ResponseWriter.WriteHeader(status)
 }
@@ -34,7 +39,7 @@ func (writer *statusWriter) WriteHeader(status int) {
 func requestMiddleware(next http.Handler, logger *slog.Logger) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestID := r.Header.Get("X-Request-ID")
-		if requestID == "" {
+		if !validRequestID(requestID) {
 			requestID = randomRequestID()
 		}
 		w.Header().Set("X-Request-ID", requestID)
@@ -53,6 +58,22 @@ func requestMiddleware(next http.Handler, logger *slog.Logger) http.Handler {
 			"duration_ms", time.Since(started).Milliseconds(),
 		)
 	})
+}
+
+func validRequestID(value string) bool {
+	if len(value) < 1 || len(value) > 64 {
+		return false
+	}
+	for _, character := range value {
+		if character >= 'a' && character <= 'z' ||
+			character >= 'A' && character <= 'Z' ||
+			character >= '0' && character <= '9' ||
+			character == '-' || character == '_' || character == '.' {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func randomRequestID() string {
