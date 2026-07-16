@@ -147,3 +147,93 @@ func TestJoinRequestPublishesOnlyPublicDataAfterSuccess(t *testing.T) {
 		t.Fatalf("published event = %s", encoded)
 	}
 }
+
+func TestApprovedGuestCanUpgrade(t *testing.T) {
+	service := rooms.NewRoomService()
+	created, err := service.CreateRoom("Owner")
+	if err != nil {
+		t.Fatal(err)
+	}
+	joinRequest, err := service.CreateJoinRequest(created.Code, "Guest")
+	if err != nil {
+		t.Fatal(err)
+	}
+	approved, err := service.ApproveJoinRequest(created.Room.ID, joinRequest.ID, created.OwnerSessionToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hub := realtime.NewHubWithPresence(&memoryPresence{})
+	mux := http.NewServeMux()
+	mux.Handle("GET /api/v1/rooms/{roomId}/events", handlers.NewRealtimeHandler(service, hub, []string{"http://localhost:5173"}))
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	config, _ := websocket.NewConfig("ws"+strings.TrimPrefix(server.URL, "http")+"/api/v1/rooms/"+created.Room.ID+"/events", "http://localhost:5173")
+	config.Header.Set("Cookie", (&http.Cookie{Name: "reso_guest_session", Value: approved.SessionToken}).String())
+	connection, err := websocket.DialConfig(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connection.Close()
+	var joined realtime.Envelope
+	if err := websocket.JSON.Receive(connection, &joined); err != nil {
+		t.Fatal(err)
+	}
+	payload, ok := joined.Payload.(map[string]any)
+	if joined.Type != "participant.joined" || !ok || payload["role"] != "participant" {
+		t.Fatalf("guest join event = %#v", joined)
+	}
+}
+
+func TestRoomMutationHandlersPublishAfterSuccess(t *testing.T) {
+	service := rooms.NewRoomService()
+	created, err := service.CreateRoom("Owner")
+	if err != nil {
+		t.Fatal(err)
+	}
+	hub := realtime.NewHubWithPresence(&memoryPresence{})
+	owner, err := hub.Join(context.Background(), created.Room.ID, "owner", "owner-id")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer hub.Leave(context.Background(), owner)
+	<-owner.Events()
+	<-owner.Events()
+
+	approveRequest, _ := service.CreateJoinRequest(created.Code, "Approve")
+	request := httptest.NewRequest(http.MethodPost, "/approve", nil)
+	request.SetPathValue("roomId", created.Room.ID)
+	request.SetPathValue("requestId", approveRequest.ID)
+	request.AddCookie(&http.Cookie{Name: "reso_owner_session", Value: created.OwnerSessionToken})
+	recorder := httptest.NewRecorder()
+	handlers.NewApproveJoinRequestHandler(service, hub).ServeHTTP(recorder, request)
+	assertEventType(t, owner, "join.approved")
+
+	rejectRequest, _ := service.CreateJoinRequest(created.Code, "Reject")
+	request = httptest.NewRequest(http.MethodPost, "/reject", nil)
+	request.SetPathValue("roomId", created.Room.ID)
+	request.SetPathValue("requestId", rejectRequest.ID)
+	request.AddCookie(&http.Cookie{Name: "reso_owner_session", Value: created.OwnerSessionToken})
+	recorder = httptest.NewRecorder()
+	handlers.NewRejectJoinRequestHandler(service, hub).ServeHTTP(recorder, request)
+	assertEventType(t, owner, "join.rejected")
+
+	request = httptest.NewRequest(http.MethodPost, "/end", nil)
+	request.SetPathValue("roomId", created.Room.ID)
+	request.AddCookie(&http.Cookie{Name: "reso_owner_session", Value: created.OwnerSessionToken})
+	recorder = httptest.NewRecorder()
+	handlers.NewEndRoomHandler(service, hub).ServeHTTP(recorder, request)
+	assertEventType(t, owner, "room.ended")
+}
+
+func assertEventType(t *testing.T, client *realtime.Client, want string) {
+	t.Helper()
+	select {
+	case event := <-client.Events():
+		if event.Type != want {
+			t.Fatalf("event type = %q, want %q", event.Type, want)
+		}
+	case <-time.After(time.Second):
+		t.Fatalf("timed out waiting for %s", want)
+	}
+}

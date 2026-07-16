@@ -87,6 +87,7 @@ type Client struct {
 	SessionID string
 	send      chan Envelope
 	done      chan struct{}
+	heartbeat chan struct{}
 	once      sync.Once
 }
 
@@ -110,12 +111,17 @@ type Hub struct {
 	mu       sync.Mutex
 	presence Presence
 	rooms    map[string]map[*Client]struct{}
+	ttl      time.Duration
 }
 
 func NewHub(client redisEvaler) *Hub { return NewHubWithPresence(NewRedisPresence(client)) }
 
 func NewHubWithPresence(presence Presence) *Hub {
-	return &Hub{presence: presence, rooms: make(map[string]map[*Client]struct{})}
+	return NewHubWithPresenceTTL(presence, presenceTTL)
+}
+
+func NewHubWithPresenceTTL(presence Presence, ttl time.Duration) *Hub {
+	return &Hub{presence: presence, rooms: make(map[string]map[*Client]struct{}), ttl: ttl}
 }
 
 func (hub *Hub) Join(ctx context.Context, roomID, role, identity string) (*Client, error) {
@@ -123,67 +129,115 @@ func (hub *Hub) Join(ctx context.Context, roomID, role, identity string) (*Clien
 	if err != nil {
 		return nil, err
 	}
-	admitted, err := hub.presence.Join(ctx, roomID, sessionID, time.Now().Add(presenceTTL), maxRoomSessions)
+	admitted, err := hub.presence.Join(ctx, roomID, sessionID, time.Now().Add(hub.ttl), maxRoomSessions)
 	if err != nil {
 		return nil, err
 	}
 	if !admitted {
 		return nil, ErrRoomFull
 	}
-	client := &Client{RoomID: roomID, Role: role, Identity: identity, SessionID: sessionID, send: make(chan Envelope, outboundBuffer), done: make(chan struct{})}
+	client := &Client{RoomID: roomID, Role: role, Identity: identity, SessionID: sessionID, send: make(chan Envelope, outboundBuffer), done: make(chan struct{}), heartbeat: make(chan struct{}, 1)}
 	hub.mu.Lock()
 	if hub.rooms[roomID] == nil {
 		hub.rooms[roomID] = make(map[*Client]struct{})
 	}
 	hub.rooms[roomID][client] = struct{}{}
-	hub.broadcastLocked(roomID, NewEnvelope("participant.joined", "", map[string]string{"participantId": identity, "role": role}))
+	removed := hub.broadcastLocked(roomID, NewEnvelope("participant.joined", "", map[string]string{"participantId": identity, "role": role}))
 	if role == "owner" {
-		hub.broadcastLocked(roomID, NewEnvelope("stream.host.changed", "", map[string]string{"participantId": identity}))
+		removed = append(removed, hub.broadcastLocked(roomID, NewEnvelope("stream.host.changed", "", map[string]string{"participantId": identity}))...)
 	}
 	hub.mu.Unlock()
+	hub.cleanup(context.Background(), removed)
+	go hub.watch(client)
 	return client, nil
 }
 
 func (hub *Hub) Heartbeat(ctx context.Context, client *Client) error {
-	return hub.presence.Heartbeat(ctx, client.RoomID, client.SessionID, time.Now().Add(presenceTTL))
+	if err := hub.presence.Heartbeat(ctx, client.RoomID, client.SessionID, time.Now().Add(hub.ttl)); err != nil {
+		return err
+	}
+	select {
+	case client.heartbeat <- struct{}{}:
+	default:
+	}
+	return nil
 }
 
 func (hub *Hub) Leave(ctx context.Context, client *Client) {
-	client.Close()
+	hub.remove(ctx, client)
+}
+
+func (hub *Hub) watch(client *Client) {
+	timer := time.NewTimer(hub.ttl)
+	defer timer.Stop()
+	for {
+		select {
+		case <-client.Done():
+			return
+		case <-client.heartbeat:
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
+			timer.Reset(hub.ttl)
+		case <-timer.C:
+			hub.remove(context.Background(), client)
+			return
+		}
+	}
+}
+
+func (hub *Hub) remove(ctx context.Context, client *Client) {
 	hub.mu.Lock()
+	removed := hub.removeLocked(client)
+	hub.mu.Unlock()
+	hub.cleanup(ctx, removed)
+}
+
+func (hub *Hub) removeLocked(client *Client) []*Client {
 	clients := hub.rooms[client.RoomID]
 	if _, found := clients[client]; !found {
-		hub.mu.Unlock()
-		return
+		return nil
 	}
 	delete(clients, client)
+	client.Close()
 	if len(clients) == 0 {
 		delete(hub.rooms, client.RoomID)
 	}
-	hub.broadcastLocked(client.RoomID, NewEnvelope("participant.left", "", map[string]string{"participantId": client.Identity, "role": client.Role}))
+	removed := []*Client{client}
+	removed = append(removed, hub.broadcastLocked(client.RoomID, NewEnvelope("participant.left", "", map[string]string{"participantId": client.Identity, "role": client.Role}))...)
 	if client.Role == "owner" {
 		for candidate := range clients {
-			hub.broadcastLocked(client.RoomID, NewEnvelope("stream.host.changed", "", map[string]string{"participantId": candidate.Identity}))
+			removed = append(removed, hub.broadcastLocked(client.RoomID, NewEnvelope("stream.host.changed", "", map[string]string{"participantId": candidate.Identity}))...)
 			break
 		}
 	}
-	hub.mu.Unlock()
-	_ = hub.presence.Leave(ctx, client.RoomID, client.SessionID)
+	return removed
+}
+
+func (hub *Hub) cleanup(ctx context.Context, clients []*Client) {
+	for _, client := range clients {
+		_ = hub.presence.Leave(ctx, client.RoomID, client.SessionID)
+	}
 }
 
 func (hub *Hub) Publish(roomID, eventType, requestID string, payload any) {
 	hub.mu.Lock()
-	hub.broadcastLocked(roomID, NewEnvelope(eventType, requestID, payload))
+	removed := hub.broadcastLocked(roomID, NewEnvelope(eventType, requestID, payload))
 	hub.mu.Unlock()
+	hub.cleanup(context.Background(), removed)
 }
 
-func (hub *Hub) broadcastLocked(roomID string, event Envelope) {
+func (hub *Hub) broadcastLocked(roomID string, event Envelope) []*Client {
+	var removed []*Client
 	for client := range hub.rooms[roomID] {
 		if !client.Send(event) {
-			delete(hub.rooms[roomID], client)
-			go hub.presence.Leave(context.Background(), roomID, client.SessionID)
+			removed = append(removed, hub.removeLocked(client)...)
 		}
 	}
+	return removed
 }
 
 func randomID() (string, error) {

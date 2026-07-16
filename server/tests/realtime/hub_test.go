@@ -2,15 +2,21 @@ package realtime_test
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/subham12r/reso/internal/realtime"
 )
 
-type memoryPresence struct{ sessions map[string]time.Time }
+type memoryPresence struct {
+	mu       sync.Mutex
+	sessions map[string]time.Time
+}
 
 func (p *memoryPresence) Join(_ context.Context, _, sessionID string, expiresAt time.Time, maximum int) (bool, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	if p.sessions == nil {
 		p.sessions = make(map[string]time.Time)
 	}
@@ -28,11 +34,15 @@ func (p *memoryPresence) Join(_ context.Context, _, sessionID string, expiresAt 
 }
 
 func (p *memoryPresence) Heartbeat(_ context.Context, _, sessionID string, expiresAt time.Time) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	p.sessions[sessionID] = expiresAt
 	return nil
 }
 
 func (p *memoryPresence) Leave(_ context.Context, _, sessionID string) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	delete(p.sessions, sessionID)
 	return nil
 }
@@ -63,5 +73,75 @@ func TestEnvelopeIsVersionedAndTimestamped(t *testing.T) {
 	}
 	if _, err := time.Parse(time.RFC3339Nano, event.Timestamp); err != nil {
 		t.Fatalf("timestamp = %q: %v", event.Timestamp, err)
+	}
+}
+
+func TestHubExpiresClientWithoutApplicationHeartbeat(t *testing.T) {
+	hub := realtime.NewHubWithPresenceTTL(&memoryPresence{}, 50*time.Millisecond)
+	observer, err := hub.Join(context.Background(), "room", "participant", "observer")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer hub.Leave(context.Background(), observer)
+	<-observer.Events()
+	expiring, err := hub.Join(context.Background(), "room", "participant", "expiring")
+	if err != nil {
+		t.Fatal(err)
+	}
+	<-observer.Events()
+	<-expiring.Events()
+	if err := hub.Heartbeat(context.Background(), observer); err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case <-expiring.Done():
+	case <-time.After(time.Second):
+		t.Fatal("client remained connected after application heartbeat expiry")
+	}
+	event := <-observer.Events()
+	if event.Type != "participant.left" {
+		t.Fatalf("expiry event = %q, want participant.left", event.Type)
+	}
+}
+
+func TestSlowConsumerEvictionUsesParticipantLifecycle(t *testing.T) {
+	hub := realtime.NewHubWithPresence(&memoryPresence{})
+	slowOwner, err := hub.Join(context.Background(), "room", "owner", "owner-id")
+	if err != nil {
+		t.Fatal(err)
+	}
+	observer, err := hub.Join(context.Background(), "room", "participant", "observer-id")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer hub.Leave(context.Background(), observer)
+	<-observer.Events()
+
+	seenLeft := false
+	seenHostChange := false
+	for index := 0; index < 40; index++ {
+		hub.Publish("room", "test.event", "", index)
+		event := <-observer.Events()
+		seenLeft = seenLeft || event.Type == "participant.left"
+		seenHostChange = seenHostChange || event.Type == "stream.host.changed"
+	}
+	for {
+		select {
+		case event := <-observer.Events():
+			seenLeft = seenLeft || event.Type == "participant.left"
+			seenHostChange = seenHostChange || event.Type == "stream.host.changed"
+		default:
+			goto drained
+		}
+	}
+drained:
+	select {
+	case <-slowOwner.Done():
+	default:
+		t.Fatal("slow owner was not disconnected")
+	}
+	if !seenLeft || !seenHostChange {
+		t.Fatalf("slow eviction events: participant.left=%v stream.host.changed=%v", seenLeft, seenHostChange)
 	}
 }
