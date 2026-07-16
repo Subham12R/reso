@@ -1,0 +1,15 @@
+meta {
+  name: Queue status
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{baseUrl}}/api/v1/queue/{{queueSessionId}}/status
+  body: none
+  auth: none
+}
+
+script:post-response {
+  bru.setVar("reservationId", res.body.ReservationID);
+}

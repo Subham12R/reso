@@ -1,0 +1,15 @@
+meta {
+  name: Queue join
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{baseUrl}}/api/v1/queue/join
+  body: none
+  auth: none
+}
+
+script:post-response {
+  bru.setVar("queueSessionId", res.body.ID);
+}

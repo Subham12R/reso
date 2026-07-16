@@ -25,6 +25,7 @@ func NewRouter(roomService *rooms.RoomService, queueService *queue.Service, medi
 		router.Handle("GET /api/v1/queue/{queueSessionId}/status", handlers.NewQueueStatusHandler(queueService))
 		router.Handle("POST /api/v1/queue/{queueSessionId}/heartbeat", handlers.NewQueueHeartbeatHandler(queueService))
 		router.Handle("POST /api/v1/queue/{queueSessionId}/leave", handlers.NewQueueLeaveHandler(queueService))
+		router.Handle("POST /api/v1/queue/{queueSessionId}/claim", handlers.NewQueueClaimHandler(roomService))
 	}
 	return router
 }

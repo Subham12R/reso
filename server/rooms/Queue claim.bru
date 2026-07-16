@@ -1,0 +1,26 @@
+meta {
+  name: Queue claim
+  type: http
+  seq: 12
+}
+
+post {
+  url: {{baseUrl}}/api/v1/queue/{{queueSessionId}}/claim
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "displayName": "Queued owner"
+  }
+}
+
+script:post-response {
+  bru.setVar("roomId", res.body.roomId);
+  bru.setVar("roomCode", res.body.code);
+}

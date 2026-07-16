@@ -1,0 +1,11 @@
+meta {
+  name: Queue leave
+  type: http
+  seq: 11
+}
+
+post {
+  url: {{baseUrl}}/api/v1/queue/{{queueSessionId}}/leave
+  body: none
+  auth: none
+}

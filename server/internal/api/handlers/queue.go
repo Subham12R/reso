@@ -3,9 +3,12 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/subham12r/reso/internal/queue"
+	"github.com/subham12r/reso/internal/rooms"
 )
 
 func NewQueueJoinHandler(service *queue.Service) http.Handler {
@@ -43,6 +46,36 @@ func NewQueueHeartbeatHandler(service *queue.Service) http.Handler {
 }
 func NewQueueLeaveHandler(service *queue.Service) http.Handler {
 	return queueAction(service.Leave)
+}
+
+func NewQueueClaimHandler(service *rooms.RoomService) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		cookie, err := r.Cookie("reso_queue_session")
+		if err != nil || cookie.Value == "" {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		var input createRoomRequest
+		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+			http.Error(w, "invalid request", http.StatusBadRequest)
+			return
+		}
+		input.DisplayName = strings.TrimSpace(input.DisplayName)
+		if input.DisplayName == "" {
+			http.Error(w, "display name is required", http.StatusBadRequest)
+			return
+		}
+		created, err := service.ClaimRoom(input.DisplayName, r.PathValue("queueSessionId"), cookie.Value)
+		if err != nil {
+			if errors.Is(err, rooms.ErrUnauthorized) {
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+			http.Error(w, "reservation unavailable", http.StatusConflict)
+			return
+		}
+		writeCreatedRoom(w, created)
+	})
 }
 
 func queueAction(action func(context.Context, string, string) error) http.Handler {

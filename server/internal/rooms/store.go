@@ -4,6 +4,8 @@ import "context"
 
 type Store interface {
 	CreateRoom(context.Context, Room) error
+	ClaimRoom(context.Context, Room, string, string) error
+	EndRoom(context.Context, Room, string) error
 	UpdateRoom(context.Context, Room) error
 
 	FindRoomByCodeHash(context.Context, string) (Room, error)

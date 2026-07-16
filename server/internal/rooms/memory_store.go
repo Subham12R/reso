@@ -24,7 +24,13 @@ func (store *MemoryStore) CreateRoom(_ context.Context, room Room) error {
 	store.mu.Lock()
 	defer store.mu.Unlock()
 
-	if len(store.roomsByID) >= 3 {
+	active := 0
+	for _, existing := range store.roomsByID {
+		if existing.State != RoomStateEnded {
+			active++
+		}
+	}
+	if active >= 3 {
 		return ErrRoomCapacityReached
 	}
 
@@ -32,6 +38,14 @@ func (store *MemoryStore) CreateRoom(_ context.Context, room Room) error {
 	store.roomsByID[room.ID] = room
 
 	return nil
+}
+
+func (store *MemoryStore) ClaimRoom(_ context.Context, _ Room, _, _ string) error {
+	return ErrReservationUnavailable
+}
+
+func (store *MemoryStore) EndRoom(ctx context.Context, room Room, _ string) error {
+	return store.UpdateRoom(ctx, room)
 }
 
 func (store *MemoryStore) UpdateRoom(_ context.Context, room Room) error {

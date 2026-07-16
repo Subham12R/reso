@@ -1,0 +1,11 @@
+meta {
+  name: Queue heartbeat
+  type: http
+  seq: 10
+}
+
+post {
+  url: {{baseUrl}}/api/v1/queue/{{queueSessionId}}/heartbeat
+  body: none
+  auth: none
+}

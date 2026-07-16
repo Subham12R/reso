@@ -18,6 +18,7 @@ var ErrUnauthorized = errors.New("unauthorized")
 var ErrJoinRequestNotFound = errors.New("join request not found")
 var ErrRoomEnded = errors.New("room ended")
 var ErrRoomExpired = errors.New("room expired")
+var ErrReservationUnavailable = errors.New("reservation unavailable")
 
 type RoomService struct {
 	store Store
@@ -45,6 +46,30 @@ func NewRoomServiceWithStore(store Store) *RoomService {
 }
 
 func (service *RoomService) CreateRoom(ownerName string) (CreatedRoom, error) {
+	created, err := newRoom(ownerName)
+	if err != nil {
+		return CreatedRoom{}, err
+	}
+
+	if err := service.store.CreateRoom(context.Background(), created.Room); err != nil {
+		return CreatedRoom{}, err
+	}
+
+	return created, nil
+}
+
+func (service *RoomService) ClaimRoom(ownerName, queueSessionID, queueToken string) (CreatedRoom, error) {
+	created, err := newRoom(ownerName)
+	if err != nil {
+		return CreatedRoom{}, err
+	}
+	if err := service.store.ClaimRoom(context.Background(), created.Room, queueSessionID, hashSecret(queueToken)); err != nil {
+		return CreatedRoom{}, err
+	}
+	return created, nil
+}
+
+func newRoom(ownerName string) (CreatedRoom, error) {
 	roomID, err := generateSecret(16)
 	if err != nil {
 		return CreatedRoom{}, err
@@ -68,10 +93,6 @@ func (service *RoomService) CreateRoom(ownerName string) (CreatedRoom, error) {
 		State:            RoomStateActive,
 		CreatedAt:        time.Now(),
 		ExpiresAt:        time.Now().Add(8 * time.Hour),
-	}
-
-	if err := service.store.CreateRoom(context.Background(), room); err != nil {
-		return CreatedRoom{}, err
 	}
 
 	return CreatedRoom{
@@ -112,10 +133,18 @@ func (service *RoomService) EndRoom(roomID, ownerSessionToken string) (Room, err
 	}
 	room.State = RoomStateEnded
 	room.EndedAt = time.Now()
-	if err := service.store.UpdateRoom(ctx, room); err != nil {
+	if err := service.endRoom(ctx, room); err != nil {
 		return Room{}, err
 	}
 	return room, nil
+}
+
+func (service *RoomService) endRoom(ctx context.Context, room Room) error {
+	reservationID, err := generateSecret(16)
+	if err != nil {
+		return err
+	}
+	return service.store.EndRoom(ctx, room, reservationID)
 }
 
 func (service *RoomService) RoomState(roomID string) (Room, error) {
@@ -126,7 +155,7 @@ func (service *RoomService) RoomState(roomID string) (Room, error) {
 	if room.State == RoomStateActive && time.Now().After(room.ExpiresAt) {
 		room.State = RoomStateEnded
 		room.EndedAt = time.Now()
-		if err := service.store.UpdateRoom(context.Background(), room); err != nil {
+		if err := service.endRoom(context.Background(), room); err != nil {
 			return Room{}, err
 		}
 	}

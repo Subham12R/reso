@@ -93,23 +93,22 @@ func NewRoomHandler(service *rooms.RoomService) http.Handler {
 			return
 		}
 
-		http.SetCookie(w, &http.Cookie{
-			Name:     "reso_owner_session",
-			Value:    created.OwnerSessionToken,
-			Path:     "/",
-			HttpOnly: true,
-			Secure:   true,
-			SameSite: http.SameSiteLaxMode,
-		})
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-
-		_ = json.NewEncoder(w).Encode(createRoomResponse{
-			RoomID: created.Room.ID,
-			Code:   created.Code,
-		})
+		writeCreatedRoom(w, created)
 	})
+}
+
+func writeCreatedRoom(w http.ResponseWriter, created rooms.CreatedRoom) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     "reso_owner_session",
+		Value:    created.OwnerSessionToken,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+	})
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	_ = json.NewEncoder(w).Encode(createRoomResponse{RoomID: created.Room.ID, Code: created.Code})
 }
 
 func NewApproveJoinRequestHandler(service *rooms.RoomService) http.Handler {
