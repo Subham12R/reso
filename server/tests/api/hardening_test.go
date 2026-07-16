@@ -72,16 +72,16 @@ func TestRouterAddsRequestIDAndSecurityHeaders(t *testing.T) {
 	}
 
 	request = httptest.NewRequest(http.MethodGet, "/health", nil)
-	request.Header.Set("X-Request-ID", "caller-request-id")
+	request.Header.Set("X-Request-ID", "0123456789abcdef0123456789abcdef")
 	recorder = httptest.NewRecorder()
 	router.ServeHTTP(recorder, request)
-	if got := recorder.Header().Get("X-Request-ID"); got != "caller-request-id" {
+	if got := recorder.Header().Get("X-Request-ID"); got != "0123456789abcdef0123456789abcdef" {
 		t.Fatalf("propagated X-Request-ID = %q", got)
 	}
 }
 
 func TestRouterReplacesUnsafeRequestIDsBeforeLogging(t *testing.T) {
-	for _, unsafeID := range []string{"SECRET TOKEN", "SECRET\nTOKEN", strings.Repeat("a", 65)} {
+	for _, unsafeID := range []string{"SECRET-TOKEN_abc123", "SECRET TOKEN", "SECRET\nTOKEN", strings.Repeat("a", 65)} {
 		t.Run(unsafeID[:6], func(t *testing.T) {
 			var logs bytes.Buffer
 			router := api.NewRouterWithOptions(

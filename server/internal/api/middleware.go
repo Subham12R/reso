@@ -61,14 +61,11 @@ func requestMiddleware(next http.Handler, logger *slog.Logger) http.Handler {
 }
 
 func validRequestID(value string) bool {
-	if len(value) < 1 || len(value) > 64 {
+	if len(value) != 32 {
 		return false
 	}
 	for _, character := range value {
-		if character >= 'a' && character <= 'z' ||
-			character >= 'A' && character <= 'Z' ||
-			character >= '0' && character <= '9' ||
-			character == '-' || character == '_' || character == '.' {
+		if character >= '0' && character <= '9' || character >= 'a' && character <= 'f' {
 			continue
 		}
 		return false
