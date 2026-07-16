@@ -34,7 +34,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:    ":8080",
-		Handler: api.NewRouterWithQueue(roomService, queue.NewService(redisClient), handlers.MediaConfig{URL: config.LiveKitURL, APIKey: config.LiveKitAPIKey, Secret: config.LiveKitSecret}),
+		Handler: api.NewRouter(roomService, queue.NewService(redisClient), handlers.MediaConfig{URL: config.LiveKitURL, APIKey: config.LiveKitAPIKey, Secret: config.LiveKitSecret}),
 	}
 	fmt.Println("Server is running on :8080")
 	log.Fatal(server.ListenAndServe())

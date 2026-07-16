@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 
@@ -38,20 +39,20 @@ func NewQueueStatusHandler(service *queue.Service) http.Handler {
 }
 
 func NewQueueHeartbeatHandler(service *queue.Service) http.Handler {
-	return queueAction(service, func(ctx *http.Request, id, token string) error { return service.Heartbeat(ctx.Context(), id, token) })
+	return queueAction(service.Heartbeat)
 }
 func NewQueueLeaveHandler(service *queue.Service) http.Handler {
-	return queueAction(service, func(ctx *http.Request, id, token string) error { return service.Leave(ctx.Context(), id, token) })
+	return queueAction(service.Leave)
 }
 
-func queueAction(service *queue.Service, action func(*http.Request, string, string) error) http.Handler {
+func queueAction(action func(context.Context, string, string) error) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie("reso_queue_session")
 		if err != nil {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
-		if err := action(r, r.PathValue("queueSessionId"), cookie.Value); err != nil {
+		if err := action(r.Context(), r.PathValue("queueSessionId"), cookie.Value); err != nil {
 			http.Error(w, "queue session unavailable", http.StatusNotFound)
 			return
 		}

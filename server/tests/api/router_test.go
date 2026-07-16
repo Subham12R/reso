@@ -7,11 +7,12 @@ import (
 	"testing"
 
 	"github.com/subham12r/reso/internal/api"
+	"github.com/subham12r/reso/internal/api/handlers"
 	"github.com/subham12r/reso/internal/rooms"
 )
 
 func TestRouterRoutesRoomCreation(t *testing.T) {
-	router := api.NewRouter(rooms.NewRoomService())
+	router := api.NewRouter(rooms.NewRoomService(), nil, handlers.MediaConfig{})
 
 	request := httptest.NewRequest(
 		http.MethodPost,
@@ -36,7 +37,7 @@ func TestRouterRoutesJoinRequest(t *testing.T) {
 		t.Fatalf("CreateRoom() error = %v", err)
 	}
 
-	router := api.NewRouter(service)
+	router := api.NewRouter(service, nil, handlers.MediaConfig{})
 
 	request := httptest.NewRequest(
 		http.MethodPost,
@@ -68,7 +69,7 @@ func TestRouterRoutesJoinApproval(t *testing.T) {
 		t.Fatalf("CreateJoinRequest() error = %v", err)
 	}
 
-	router := api.NewRouter(service)
+	router := api.NewRouter(service, nil, handlers.MediaConfig{})
 
 	request := httptest.NewRequest(
 		http.MethodPost,
@@ -102,7 +103,7 @@ func TestRouterRoutesJoinRejection(t *testing.T) {
 		t.Fatalf("CreateJoinRequest() error = %v", err)
 	}
 
-	router := api.NewRouter(service)
+	router := api.NewRouter(service, nil, handlers.MediaConfig{})
 
 	request := httptest.NewRequest(
 		http.MethodPost,
@@ -131,7 +132,7 @@ func TestRouterRoutesPendingJoinRequestList(t *testing.T) {
 		t.Fatalf("CreateRoom() error = %v", err)
 	}
 
-	router := api.NewRouter(service)
+	router := api.NewRouter(service, nil, handlers.MediaConfig{})
 
 	request := httptest.NewRequest(
 		http.MethodGet,

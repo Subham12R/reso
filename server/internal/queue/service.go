@@ -13,13 +13,11 @@ import (
 )
 
 const (
-	activeRoomsKey = "reso:rooms:active"
-	queueKey       = "reso:queue"
+	queueKey = "reso:queue"
 )
 
 var ErrNotFound = errors.New("queue session not found")
 var ErrUnauthorized = errors.New("queue session unauthorized")
-var ErrNotReserved = errors.New("queue session not reserved")
 
 type Status string
 
