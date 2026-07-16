@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/subham12r/reso/internal/rooms"
 )
@@ -192,6 +193,44 @@ type pendingJoinRequestResponse struct {
 	ID     string                  `json:"id"`
 	Name   string                  `json:"name"`
 	Status rooms.JoinRequestStatus `json:"status"`
+}
+
+func NewEndRoomHandler(service *rooms.RoomService) http.Handler {
+	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		ownerCookie, err := request.Cookie("reso_owner_session")
+		if err != nil || ownerCookie.Value == "" {
+			http.Error(writer, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		room, err := service.EndRoom(request.PathValue("roomId"), ownerCookie.Value)
+		if err != nil {
+			http.Error(writer, "room unavailable", http.StatusNotFound)
+			return
+		}
+
+		writer.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(writer).Encode(struct {
+			State rooms.RoomState `json:"state"`
+		}{State: room.State})
+	})
+}
+
+func NewRoomStateHandler(service *rooms.RoomService) http.Handler {
+	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		room, err := service.RoomState(request.PathValue("roomId"))
+		if err != nil {
+			http.Error(writer, "room unavailable", http.StatusNotFound)
+			return
+		}
+
+		writer.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(writer).Encode(struct {
+			ID        string          `json:"roomId"`
+			State     rooms.RoomState `json:"state"`
+			ExpiresAt time.Time       `json:"expiresAt"`
+		}{ID: room.ID, State: room.State, ExpiresAt: room.ExpiresAt})
+	})
 }
 
 func NewListPendingJoinRequestsHandler(

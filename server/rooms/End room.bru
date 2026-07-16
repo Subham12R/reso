@@ -1,0 +1,15 @@
+meta {
+  name: End room
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/api/v1/rooms/{{roomId}}/end
+  body: none
+  auth: none
+}
+
+headers {
+  Cookie: reso_owner_session={{ownerSessionToken}}
+}

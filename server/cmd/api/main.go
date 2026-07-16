@@ -7,7 +7,9 @@ import (
 	"net/http"
 
 	"github.com/subham12r/reso/internal/api"
+	"github.com/subham12r/reso/internal/api/handlers"
 	"github.com/subham12r/reso/internal/config"
+	"github.com/subham12r/reso/internal/queue"
 	"github.com/subham12r/reso/internal/redisclient"
 	"github.com/subham12r/reso/internal/rooms"
 )
@@ -32,7 +34,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:    ":8080",
-		Handler: api.NewRouter(roomService),
+		Handler: api.NewRouterWithQueue(roomService, queue.NewService(redisClient), handlers.MediaConfig{URL: config.LiveKitURL, APIKey: config.LiveKitAPIKey, Secret: config.LiveKitSecret}),
 	}
 	fmt.Println("Server is running on :8080")
 	log.Fatal(server.ListenAndServe())

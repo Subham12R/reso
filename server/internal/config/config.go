@@ -8,7 +8,10 @@ import (
 )
 
 type Config struct {
-	RedisURL string
+	RedisURL       string
+	LiveKitURL     string
+	LiveKitAPIKey  string
+	LiveKitSecret  string
 }
 
 func Load() (Config, error) {
@@ -21,5 +24,10 @@ func Load() (Config, error) {
 		return Config{}, errors.New("REDIS_URL not set")
 	}
 
-	return Config{RedisURL: redisURL}, nil
+	return Config{
+		RedisURL:      redisURL,
+		LiveKitURL:    os.Getenv("LIVEKIT_URL"),
+		LiveKitAPIKey: os.Getenv("LIVEKIT_API_KEY"),
+		LiveKitSecret: os.Getenv("LIVEKIT_API_SECRET"),
+	}, nil
 }

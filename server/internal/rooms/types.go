@@ -2,12 +2,22 @@ package rooms
 
 import "time"
 
+type RoomState string
+
+const (
+	RoomStateActive RoomState = "active"
+	RoomStateEnded  RoomState = "ended"
+)
+
 type Room struct {
 	ID               string
 	CodeHash         string
 	OwnerSessionHash string
 	OwnerName        string
+	State            RoomState
 	CreatedAt        time.Time
+	ExpiresAt        time.Time
+	EndedAt          time.Time
 }
 
 type JoinRequestStatus string

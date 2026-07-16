@@ -16,6 +16,8 @@ var ErrJoinRequestNotPending = errors.New("join request not pending")
 var ErrJoinRequestExpired = errors.New("join request expired")
 var ErrUnauthorized = errors.New("unauthorized")
 var ErrJoinRequestNotFound = errors.New("join request not found")
+var ErrRoomEnded = errors.New("room ended")
+var ErrRoomExpired = errors.New("room expired")
 
 type RoomService struct {
 	store Store
@@ -26,6 +28,13 @@ type CreatedRoom struct {
 	Code              string
 	OwnerSessionToken string
 }
+
+type SessionRole string
+
+const (
+	SessionRoleOwner       SessionRole = "owner"
+	SessionRoleParticipant SessionRole = "participant"
+)
 
 func NewRoomService() *RoomService {
 	return NewRoomServiceWithStore(NewMemoryStore())
@@ -56,7 +65,9 @@ func (service *RoomService) CreateRoom(ownerName string) (CreatedRoom, error) {
 		CodeHash:         hashSecret(code),
 		OwnerSessionHash: hashSecret(ownerSessionToken),
 		OwnerName:        ownerName,
+		State:            RoomStateActive,
 		CreatedAt:        time.Now(),
+		ExpiresAt:        time.Now().Add(8 * time.Hour),
 	}
 
 	if err := service.store.CreateRoom(context.Background(), room); err != nil {
@@ -71,10 +82,79 @@ func (service *RoomService) CreateRoom(ownerName string) (CreatedRoom, error) {
 }
 
 func (service *RoomService) FindRoomByCode(code string) (Room, error) {
-	return service.store.FindRoomByCodeHash(
+	room, err := service.store.FindRoomByCodeHash(
 		context.Background(),
 		hashSecret(code),
 	)
+	if err != nil {
+		return Room{}, err
+	}
+	if room.State == RoomStateEnded {
+		return Room{}, ErrRoomEnded
+	}
+	if time.Now().After(room.ExpiresAt) {
+		return Room{}, ErrRoomExpired
+	}
+	return room, nil
+}
+
+func (service *RoomService) EndRoom(roomID, ownerSessionToken string) (Room, error) {
+	ctx := context.Background()
+	room, err := service.store.FindRoomByID(ctx, roomID)
+	if err != nil {
+		return Room{}, err
+	}
+	if hashSecret(ownerSessionToken) != room.OwnerSessionHash {
+		return Room{}, ErrUnauthorized
+	}
+	if room.State == RoomStateEnded {
+		return room, nil
+	}
+	room.State = RoomStateEnded
+	room.EndedAt = time.Now()
+	if err := service.store.UpdateRoom(ctx, room); err != nil {
+		return Room{}, err
+	}
+	return room, nil
+}
+
+func (service *RoomService) RoomState(roomID string) (Room, error) {
+	room, err := service.store.FindRoomByID(context.Background(), roomID)
+	if err != nil {
+		return Room{}, err
+	}
+	if room.State == RoomStateActive && time.Now().After(room.ExpiresAt) {
+		room.State = RoomStateEnded
+		room.EndedAt = time.Now()
+		if err := service.store.UpdateRoom(context.Background(), room); err != nil {
+			return Room{}, err
+		}
+	}
+	return room, nil
+}
+
+func (service *RoomService) AuthorizeRoomSession(roomID, sessionToken string) (SessionRole, error) {
+	ctx := context.Background()
+	room, err := service.store.FindRoomByID(ctx, roomID)
+	if err != nil {
+		return "", err
+	}
+	if room.State != RoomStateActive || time.Now().After(room.ExpiresAt) {
+		return "", ErrRoomEnded
+	}
+	if hashSecret(sessionToken) == room.OwnerSessionHash {
+		return SessionRoleOwner, nil
+	}
+	requests, err := service.store.ListJoinRequests(ctx, roomID)
+	if err != nil {
+		return "", err
+	}
+	for _, request := range requests {
+		if request.Status == JoinRequestApproved && hashSecret(sessionToken) == request.GuestSessionHash {
+			return SessionRoleParticipant, nil
+		}
+	}
+	return "", ErrUnauthorized
 }
 
 func (service *RoomService) CreateJoinRequest(

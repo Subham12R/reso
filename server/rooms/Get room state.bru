@@ -1,0 +1,11 @@
+meta {
+  name: Get room state
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/api/v1/rooms/{{roomId}}/state
+  body: none
+  auth: none
+}

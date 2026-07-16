@@ -56,6 +56,22 @@ func (store *RedisStore) CreateRoom(ctx context.Context, room Room) error {
 	return nil
 }
 
+func (store *RedisStore) UpdateRoom(ctx context.Context, room Room) error {
+	encodedRoom, err := json.Marshal(room)
+	if err != nil {
+		return err
+	}
+
+	_, err = store.client.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+		pipe.Set(ctx, roomKey(room.ID), encodedRoom, 0)
+		if room.State == RoomStateEnded {
+			pipe.SRem(ctx, activeRoomsKey, room.ID)
+		}
+		return nil
+	})
+	return err
+}
+
 func (store *RedisStore) FindRoomByCodeHash(
 	ctx context.Context,
 	codeHash string,
@@ -161,6 +177,24 @@ func (store *RedisStore) ListPendingJoinRequests(
 	ctx context.Context,
 	roomID string,
 ) ([]JoinRequest, error) {
+	all, err := store.ListJoinRequests(ctx, roomID)
+	if err != nil {
+		return nil, err
+	}
+
+	requests := make([]JoinRequest, 0, len(all))
+	for _, request := range all {
+		if request.Status == JoinRequestPending {
+			requests = append(requests, request)
+		}
+	}
+	return requests, nil
+}
+
+func (store *RedisStore) ListJoinRequests(
+	ctx context.Context,
+	roomID string,
+) ([]JoinRequest, error) {
 	requestIDs, err := store.client.SMembers(ctx, roomJoinRequestsKey(roomID)).Result()
 	if err != nil {
 		return nil, err
@@ -175,9 +209,7 @@ func (store *RedisStore) ListPendingJoinRequests(
 		if err != nil {
 			return nil, err
 		}
-		if request.Status == JoinRequestPending {
-			requests = append(requests, request)
-		}
+		requests = append(requests, request)
 	}
 
 	return requests, nil

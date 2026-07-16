@@ -34,6 +34,18 @@ func (store *MemoryStore) CreateRoom(_ context.Context, room Room) error {
 	return nil
 }
 
+func (store *MemoryStore) UpdateRoom(_ context.Context, room Room) error {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+
+	if _, found := store.roomsByID[room.ID]; !found {
+		return ErrRoomNotFound
+	}
+	store.roomsByID[room.ID] = room
+	store.roomsByCodeHash[room.CodeHash] = room
+	return nil
+}
+
 func (store *MemoryStore) FindRoomByCodeHash(
 	_ context.Context,
 	codeHash string,
@@ -126,5 +138,18 @@ func (store *MemoryStore) ListPendingJoinRequests(
 		requests = append(requests, request)
 	}
 
+	return requests, nil
+}
+
+func (store *MemoryStore) ListJoinRequests(_ context.Context, roomID string) ([]JoinRequest, error) {
+	store.mu.RLock()
+	defer store.mu.RUnlock()
+
+	requests := make([]JoinRequest, 0)
+	for _, request := range store.joinRequests {
+		if request.RoomID == roomID {
+			requests = append(requests, request)
+		}
+	}
 	return requests, nil
 }
