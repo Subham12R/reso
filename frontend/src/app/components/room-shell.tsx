@@ -1,13 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ConnectionState, Participant, Room, RoomEvent, ScreenSharePresets, Track, TrackPublication } from "livekit-client";
+import { ConnectionState, Participant, Room, RoomEvent, Track, TrackPublication } from "livekit-client";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ComputerScreenShareIcon, FullScreenIcon, Mic01Icon, MicOff01Icon, PinIcon, PinOffIcon, SentIcon, Video01Icon, VideoOffIcon } from "@hugeicons/core-free-icons";
 import { decideJoin, endRoom, getMediaAccess, getRoomState, listPendingRequests, PendingRequest, RoomState } from "../lib/api";
 
 type Props = { roomId: string; code?: string; isOwner?: boolean; onHome: () => void };
 type Message = { sender: string; body: string };
+
+const screenShare1080p60 = { maxBitrate: 10_000_000, maxFramerate: 60 };
+const screenCapture1080p60 = { width: 1920, height: 1080, frameRate: 60 };
 
 function VideoTile({ participant, self, pinned, onPin }: { participant: Participant; self?: boolean; pinned?: boolean; onPin?: () => void }) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -38,6 +41,9 @@ export function RoomShell({ roomId, code, isOwner = false, onHome }: Props) {
   const [cameraOn, setCameraOn] = useState(false);
   const [micOn, setMicOn] = useState(false);
   const [pinnedIdentity, setPinnedIdentity] = useState<string | null>(null);
+  const [fullscreen, setFullscreen] = useState(false);
+  const [audioBlocked, setAudioBlocked] = useState(false);
+  const [chatHidden, setChatHidden] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState("");
   const [error, setError] = useState("");
@@ -63,8 +69,9 @@ export function RoomShell({ roomId, code, isOwner = false, onHome }: Props) {
   }, [refresh]);
 
   useEffect(() => {
-    const liveRoom = new Room({ publishDefaults: { screenShareEncoding: ScreenSharePresets.h1080fps30.encoding } });
+    const liveRoom = new Room({ publishDefaults: { screenShareEncoding: screenShare1080p60 } });
     let disposed = false;
+    const syncFullscreen = () => setFullscreen(document.fullscreenElement === stageContainerRef.current);
     const sync = () => setMembers([liveRoom.localParticipant, ...Array.from(liveRoom.remoteParticipants.values())]);
     const clearScreenAudio = () => {
       const element = screenAudioElementRef.current;
@@ -75,7 +82,8 @@ export function RoomShell({ roomId, code, isOwner = false, onHome }: Props) {
       screenAudioElementRef.current = null;
     };
 
-    liveRoom.on(RoomEvent.ParticipantConnected, sync).on(RoomEvent.ParticipantDisconnected, sync).on(RoomEvent.TrackSubscribed, (track) => {
+    document.addEventListener("fullscreenchange", syncFullscreen);
+    liveRoom.on(RoomEvent.ParticipantConnected, sync).on(RoomEvent.ParticipantDisconnected, sync).on(RoomEvent.AudioPlaybackStatusChanged, (canPlay) => setAudioBlocked(!canPlay)).on(RoomEvent.TrackSubscribed, (track) => {
       if (track.kind === Track.Kind.Audio && track.source === Track.Source.ScreenShareAudio && audioRef.current) {
         clearScreenAudio();
         const element = track.attach() as HTMLAudioElement;
@@ -121,7 +129,7 @@ export function RoomShell({ roomId, code, isOwner = false, onHome }: Props) {
       if (!disposed) setError(cause instanceof Error ? `Media connection failed: ${cause.message}` : "Media connection failed.");
     });
 
-    return () => { disposed = true; clearScreenAudio(); liveRoom.disconnect(); };
+    return () => { disposed = true; document.removeEventListener("fullscreenchange", syncFullscreen); clearScreenAudio(); liveRoom.disconnect(); };
   }, [roomId]);
 
   const connected = room?.state === ConnectionState.Connected;
@@ -153,7 +161,7 @@ export function RoomShell({ roomId, code, isOwner = false, onHome }: Props) {
       const tracks = await room.localParticipant.createScreenTracks({
         audio: true,
         contentHint: "detail",
-        resolution: ScreenSharePresets.h1080fps30.resolution,
+        resolution: screenCapture1080p60,
         selfBrowserSurface: "exclude",
         surfaceSwitching: "include",
         systemAudio: "include",
@@ -176,9 +184,20 @@ export function RoomShell({ roomId, code, isOwner = false, onHome }: Props) {
 
   async function fullscreen() {
     try {
-      await stageContainerRef.current?.requestFullscreen();
+      if (document.fullscreenElement === stageContainerRef.current) await document.exitFullscreen();
+      else await stageContainerRef.current?.requestFullscreen();
     } catch {
       setError("Fullscreen is unavailable in this browser.");
+    }
+  }
+
+  async function enableSharedAudio() {
+    if (!room) return;
+    try {
+      await room.startAudio();
+      setAudioBlocked(false);
+    } catch {
+      setError("Shared audio needs a click to start.");
     }
   }
 
@@ -206,24 +225,28 @@ export function RoomShell({ roomId, code, isOwner = false, onHome }: Props) {
   if (roomState?.state === "ended") return <main className="grid min-h-dvh place-items-center bg-black text-white"><button onClick={onHome}>Room closed — return home</button></main>;
 
   const pinned = members.find((member) => member.identity === pinnedIdentity);
+  const shellLayout = chatHidden ? "grid-rows-1 lg:grid-cols-1" : "grid-rows-[minmax(0,1fr)_minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_17.5rem] lg:grid-rows-1";
+  const railLayout = chatHidden ? "absolute inset-y-0 right-0 z-10 w-56" : "";
   return <main className="h-dvh max-h-dvh overflow-hidden bg-black p-2 text-white">
-    <div className="grid h-[calc(100dvh-1rem)] min-h-0 max-h-[calc(100dvh-1rem)] grid-rows-[minmax(0,1fr)_minmax(0,1fr)] overflow-hidden rounded-md border border-white/15 bg-[#171717] lg:grid-cols-[minmax(0,1fr)_17.5rem] lg:grid-rows-1">
+    <div className={`relative grid h-[calc(100dvh-1rem)] min-h-0 max-h-[calc(100dvh-1rem)] overflow-hidden rounded-md border border-white/15 bg-[#171717] ${shellLayout}`}>
       <section ref={stageContainerRef} className="relative min-h-0 overflow-hidden bg-black">
         <div ref={stageRef} className="grid size-full place-items-center text-sm text-white/45">Waiting for a shared screen</div>
         <div ref={audioRef} className="hidden" />
-        {pinned && <div className="absolute bottom-5 right-5 w-48 overflow-hidden rounded-md border border-white/25 shadow-xl"><VideoTile participant={pinned} self={pinned === room?.localParticipant} pinned onPin={() => setPinnedIdentity(null)} /></div>}
-        <button onClick={fullscreen} aria-label="Fullscreen" className="absolute right-5 top-5 grid size-10 place-items-center rounded-md bg-black/70"><HugeiconsIcon icon={FullScreenIcon} size={21} /></button>
+        {pinned && <div className="absolute bottom-5 right-5 min-h-28 min-w-40 max-h-[80%] max-w-[80%] resize overflow-hidden rounded-md border border-white/25 shadow-xl"><VideoTile participant={pinned} self={pinned === room?.localParticipant} pinned onPin={() => setPinnedIdentity(null)} /></div>}
+        <button onClick={fullscreen} aria-label={fullscreen ? "Exit fullscreen" : "Enter fullscreen"} className="absolute right-5 top-5 grid size-10 place-items-center rounded-md bg-black/70"><HugeiconsIcon icon={FullScreenIcon} size={21} /></button>
         <div className="absolute inset-x-0 bottom-5 flex justify-center gap-2">
           <button onClick={shareScreen} disabled={!canScreenShare || sharing} aria-label="Share screen" className="grid size-10 place-items-center rounded-md bg-black/70 disabled:opacity-35"><HugeiconsIcon icon={ComputerScreenShareIcon} size={21} /></button>
           <button onClick={toggleMic} aria-label="Toggle microphone" className="grid size-10 place-items-center rounded-md bg-black/70"><HugeiconsIcon icon={micOn ? Mic01Icon : MicOff01Icon} size={21} /></button>
           <button onClick={toggleCamera} aria-label="Toggle camera" className="grid size-10 place-items-center rounded-md bg-black/70"><HugeiconsIcon icon={cameraOn ? Video01Icon : VideoOffIcon} size={21} /></button>
+          {audioBlocked && <button onClick={enableSharedAudio} className="rounded-md bg-black/70 px-3 text-sm">Enable shared audio</button>}
         </div>
       </section>
-      <aside className="flex min-h-0 max-h-full flex-col gap-2 overflow-hidden border-l border-white/15 bg-[#181818] p-2">
+      <aside className={`flex min-h-0 max-h-full flex-col gap-2 overflow-hidden border-l border-white/15 bg-[#181818] p-2 ${railLayout}`}>
         <section className="rounded-md border border-white/10 px-3 py-2 text-sm">{isOwner ? <>Room Code: {code}</> : "You’re in this room"}</section>
         {isOwner && pending.length > 0 && <section className="space-y-1">{pending.map((request) => <div className="rounded bg-white/5 p-2" key={request.id}>{request.name}<div className="mt-1 grid grid-cols-2 gap-1"><button onClick={() => decide(request.id, "approve")}>Allow</button><button onClick={() => decide(request.id, "reject")}>Decline</button></div></div>)}</section>}
-        <section className="grid h-40 shrink-0 grid-cols-1 content-start gap-1.5 overflow-y-auto rounded-md border border-white/10 p-1.5 sm:h-56 lg:h-[19rem]">{members.map((member) => <VideoTile key={member.identity} participant={member} self={member === room?.localParticipant} pinned={member.identity === pinnedIdentity} onPin={() => setPinnedIdentity((identity) => identity === member.identity ? null : member.identity)} />)}</section>
-        <section className="flex min-h-0 flex-1 flex-col rounded-md border border-white/10 p-2"><p className="text-center text-sm font-medium">Room Chat</p><div className="flex-1 space-y-1 overflow-y-auto py-2">{messages.map((message, index) => <p className="rounded bg-white/5 px-2 py-1 text-xs" key={index}>{message.sender}: {message.body}</p>)}</div><form onSubmit={sendMessage} className="flex h-10 gap-2 rounded bg-white/10 px-2"><input className="min-w-0 flex-1 bg-transparent text-sm outline-none" value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Type here" /><button aria-label="Send message"><HugeiconsIcon icon={SentIcon} size={20} /></button></form></section>
+        <section aria-label="Participant videos" className="grid h-40 shrink-0 grid-cols-1 content-start gap-1.5 overflow-y-auto rounded-md border border-white/10 p-1.5 sm:h-56 lg:h-[19rem]">{members.map((member) => <VideoTile key={member.identity} participant={member} self={member === room?.localParticipant} pinned={member.identity === pinnedIdentity} onPin={() => setPinnedIdentity((identity) => identity === member.identity ? null : member.identity)} />)}</section>
+        <button onClick={() => setChatHidden((hidden) => !hidden)} aria-expanded={!chatHidden} className="h-8 rounded border border-white/20 text-sm">{chatHidden ? "Show chat" : "Hide chat"}</button>
+        {!chatHidden && <section className="flex min-h-0 flex-1 flex-col rounded-md border border-white/10 p-2"><p className="text-center text-sm font-medium">Room Chat</p><div className="flex-1 space-y-1 overflow-y-auto py-2">{messages.map((message, index) => <p className="rounded bg-white/5 px-2 py-1 text-xs" key={index}>{message.sender}: {message.body}</p>)}</div><form onSubmit={sendMessage} className="flex h-10 gap-2 rounded bg-white/10 px-2"><input className="min-w-0 flex-1 bg-transparent text-sm outline-none" value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Type here" /><button aria-label="Send message"><HugeiconsIcon icon={SentIcon} size={20} /></button></form></section>}
         <p className="text-xs text-rose-300">{error}</p>
         {isOwner ? <button onClick={closeRoom} className="h-10 rounded bg-red-500">End room</button> : <button onClick={onHome} className="h-10 rounded border border-white/20">Leave room</button>}
       </aside>
