@@ -12,6 +12,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 	"github.com/subham12r/reso/internal/api/handlers"
+	"github.com/subham12r/reso/internal/media"
 	"github.com/subham12r/reso/internal/queue"
 	"github.com/subham12r/reso/internal/realtime"
 	"github.com/subham12r/reso/internal/rooms"
@@ -30,6 +31,7 @@ type RouterOptions struct {
 	TrustProxyHeaders bool
 	Realtime          *realtime.Hub
 	AllowedOrigins    []string
+	LiveKitCleaner    media.RoomCleaner
 }
 
 func NewRouter(roomService *rooms.RoomService, queueService *queue.Service, mediaConfig handlers.MediaConfig) http.Handler {
@@ -43,8 +45,10 @@ func NewRouterWithOptions(roomService *rooms.RoomService, queueService *queue.Se
 	router.Handle("GET /ready", handlers.NewReadyHandler(options.Redis, options.LiveKitURL, options.HTTPClient))
 	router.Handle("GET /api/v1/rooms/{roomId}/join-requests", handlers.NewListPendingJoinRequestsHandler(roomService))
 	router.Handle("GET /api/v1/rooms/{roomId}/state", handlers.NewRoomStateHandler(roomService))
+	router.Handle("GET /api/v1/rooms/join-requests/{requestId}/status", handlers.NewGuestJoinStatusHandler(roomService))
 	router.Handle("POST /api/v1/rooms", validateDisplayName(handlers.NewRoomHandler(roomService)))
-	router.Handle("POST /api/v1/rooms/{roomId}/end", handlers.NewEndRoomHandler(roomService, options.Realtime))
+	router.Handle("POST /api/v1/rooms/{roomId}/end", handlers.NewEndRoomHandlerWithCleaner(roomService, options.LiveKitCleaner, options.Realtime))
+	router.Handle("POST /api/v1/rooms/{roomId}/stream-host", handlers.NewTransferStreamHostHandler(roomService, options.Realtime))
 	router.Handle("POST /api/v1/rooms/{roomId}/media/token", handlers.NewMediaTokenHandler(roomService, mediaConfig))
 	router.Handle("POST /api/v1/rooms/join-requests", validateDisplayName(handlers.NewJoinRequestHandler(roomService, options.Realtime)))
 	router.Handle("POST /api/v1/rooms/{roomId}/join-requests/{requestId}/approve", handlers.NewApproveJoinRequestHandler(roomService, options.Realtime))

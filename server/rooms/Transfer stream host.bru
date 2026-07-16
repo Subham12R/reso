@@ -1,0 +1,21 @@
+meta {
+  name: Transfer stream host
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{baseUrl}}/api/v1/rooms/{{roomId}}/stream-host
+  body: json
+  auth: none
+}
+
+headers {
+  Cookie: reso_owner_session={{ownerSessionToken}}
+}
+
+body:json {
+  {
+    "participantId": "{{participantId}}"
+  }
+}

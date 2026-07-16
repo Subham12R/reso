@@ -2,10 +2,13 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/subham12r/reso/internal/media"
 	"github.com/subham12r/reso/internal/realtime"
 	"github.com/subham12r/reso/internal/rooms"
 )
@@ -49,9 +52,15 @@ func NewJoinRequestHandler(service *rooms.RoomService, hubs ...*realtime.Hub) ht
 			return
 		}
 
-		joinRequest, err := service.CreateJoinRequest(
+		guestToken, err := generateGuestToken()
+		if err != nil {
+			http.Error(w, "join request unavailable", http.StatusInternalServerError)
+			return
+		}
+		joinRequest, err := service.CreateGuestJoinRequest(
 			input.Code,
 			input.DisplayName,
+			guestToken,
 		)
 		if err != nil {
 			http.Error(
@@ -64,6 +73,7 @@ func NewJoinRequestHandler(service *rooms.RoomService, hubs ...*realtime.Hub) ht
 		publish(hubs, joinRequest.RoomID, "join.requested", joinRequest.ID, map[string]any{"requestId": joinRequest.ID, "name": joinRequest.Name, "status": joinRequest.Status})
 
 		w.Header().Set("Content-Type", "application/json")
+		http.SetCookie(w, guestJoinTicketCookie(guestToken))
 		w.WriteHeader(http.StatusAccepted)
 
 		_ = json.NewEncoder(w).Encode(joinRequestResponse{
@@ -91,6 +101,11 @@ func NewRoomHandler(service *rooms.RoomService) http.Handler {
 		}
 		created, err := service.CreateRoom(input.DisplayName)
 		if err != nil {
+			if errors.Is(err, rooms.ErrRoomCapacityReached) {
+				http.Error(w, "all room slots are occupied", http.StatusConflict)
+				return
+			}
+			slog.Error("create room failed", "error", err)
 			http.Error(w, "Failed to create room", http.StatusInternalServerError)
 			return
 		}
@@ -137,14 +152,9 @@ func NewApproveJoinRequestHandler(service *rooms.RoomService, hubs ...*realtime.
 		}
 		publish(hubs, approved.Request.RoomID, "join.approved", approved.Request.ID, map[string]any{"requestId": approved.Request.ID, "name": approved.Request.Name, "status": approved.Request.Status})
 
-		http.SetCookie(w, &http.Cookie{
-			Name:     "reso_guest_session",
-			Value:    approved.SessionToken,
-			Path:     "/",
-			HttpOnly: true,
-			Secure:   true,
-			SameSite: http.SameSiteLaxMode,
-		})
+		if approved.SessionToken != "" {
+			http.SetCookie(w, guestSessionCookie(approved.SessionToken))
+		}
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -155,6 +165,41 @@ func NewApproveJoinRequestHandler(service *rooms.RoomService, hubs ...*realtime.
 			Status: "approved",
 		})
 	})
+}
+
+func NewGuestJoinStatusHandler(service *rooms.RoomService) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		ticket, err := request.Cookie("reso_join_ticket")
+		if err != nil || ticket.Value == "" {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		joinRequest, err := service.GuestJoinRequestStatus(request.PathValue("requestId"), ticket.Value)
+		if err != nil {
+			http.Error(w, "join request unavailable", http.StatusNotFound)
+			return
+		}
+		if joinRequest.Status == rooms.JoinRequestApproved {
+			http.SetCookie(w, guestSessionCookie(ticket.Value))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(struct {
+			Status rooms.JoinRequestStatus `json:"status"`
+			RoomID string                  `json:"roomId,omitempty"`
+		}{Status: joinRequest.Status, RoomID: joinRequest.RoomID})
+	})
+}
+
+func generateGuestToken() (string, error) {
+	return rooms.NewGuestSessionToken()
+}
+
+func guestJoinTicketCookie(token string) *http.Cookie {
+	return &http.Cookie{Name: "reso_join_ticket", Value: token, Path: "/", HttpOnly: true, Secure: true, SameSite: http.SameSiteLaxMode}
+}
+
+func guestSessionCookie(token string) *http.Cookie {
+	return &http.Cookie{Name: "reso_guest_session", Value: token, Path: "/", HttpOnly: true, Secure: true, SameSite: http.SameSiteLaxMode}
 }
 
 func NewRejectJoinRequestHandler(service *rooms.RoomService, hubs ...*realtime.Hub) http.Handler {
@@ -199,6 +244,10 @@ type pendingJoinRequestResponse struct {
 }
 
 func NewEndRoomHandler(service *rooms.RoomService, hubs ...*realtime.Hub) http.Handler {
+	return NewEndRoomHandlerWithCleaner(service, nil, hubs...)
+}
+
+func NewEndRoomHandlerWithCleaner(service *rooms.RoomService, cleaner media.RoomCleaner, hubs ...*realtime.Hub) http.Handler {
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		ownerCookie, err := request.Cookie("reso_owner_session")
 		if err != nil || ownerCookie.Value == "" {
@@ -212,11 +261,43 @@ func NewEndRoomHandler(service *rooms.RoomService, hubs ...*realtime.Hub) http.H
 			return
 		}
 		publish(hubs, room.ID, "room.ended", "", map[string]any{"roomId": room.ID, "state": room.State})
+		if cleaner != nil {
+			if err := cleaner.DeleteRoom(request.Context(), room.ID); err != nil && !errors.Is(err, media.ErrRoomAbsent) {
+				slog.Error("livekit room cleanup failed", "roomId", room.ID, "error", err)
+			}
+		}
 
 		writer.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(writer).Encode(struct {
 			State rooms.RoomState `json:"state"`
 		}{State: room.State})
+	})
+}
+
+type transferStreamHostInput struct {
+	ParticipantID string `json:"participantId"`
+}
+
+func NewTransferStreamHostHandler(service *rooms.RoomService, hubs ...*realtime.Hub) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		owner, err := request.Cookie("reso_owner_session")
+		if err != nil || owner.Value == "" {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		var input transferStreamHostInput
+		if err := json.NewDecoder(request.Body).Decode(&input); err != nil || strings.TrimSpace(input.ParticipantID) == "" {
+			http.Error(w, "invalid request", http.StatusBadRequest)
+			return
+		}
+		room, err := service.TransferStreamHost(request.PathValue("roomId"), owner.Value, input.ParticipantID)
+		if err != nil {
+			http.Error(w, "stream host unavailable", http.StatusNotFound)
+			return
+		}
+		publish(hubs, room.ID, "stream.host.changed", "", map[string]any{"participantId": input.ParticipantID})
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{"participantId": input.ParticipantID})
 	})
 }
 

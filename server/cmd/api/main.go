@@ -14,6 +14,7 @@ import (
 	"github.com/subham12r/reso/internal/api"
 	"github.com/subham12r/reso/internal/api/handlers"
 	"github.com/subham12r/reso/internal/config"
+	"github.com/subham12r/reso/internal/media"
 	"github.com/subham12r/reso/internal/queue"
 	"github.com/subham12r/reso/internal/realtime"
 	"github.com/subham12r/reso/internal/redisclient"
@@ -59,6 +60,7 @@ func run() error {
 				TrustProxyHeaders: configuration.TrustProxyHeaders,
 				Realtime:          realtimeHub,
 				AllowedOrigins:    configuration.AllowedOrigins,
+				LiveKitCleaner:    media.NewLiveKitCleaner(configuration.LiveKitURL, configuration.LiveKitAPIKey, configuration.LiveKitSecret),
 			},
 		),
 		ReadHeaderTimeout: 5 * time.Second,

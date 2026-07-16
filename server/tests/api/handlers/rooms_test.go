@@ -108,6 +108,78 @@ func TestJoinRequest(t *testing.T) {
 	}
 }
 
+func TestCreateRoomHandlerReportsCapacity(t *testing.T) {
+	service := rooms.NewRoomService()
+	for range 3 {
+		if _, err := service.CreateRoom("Subham"); err != nil {
+			t.Fatalf("seed room: %v", err)
+		}
+	}
+
+	recorder := httptest.NewRecorder()
+	handlers.NewRoomHandler(service).ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/api/v1/rooms", bytes.NewBufferString(`{"displayName":"Alex"}`)))
+
+	if recorder.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusConflict)
+	}
+}
+
+func TestGuestCanClaimApprovedJoinRequest(t *testing.T) {
+	service := rooms.NewRoomService()
+	created, err := service.CreateRoom("Subham")
+	if err != nil {
+		t.Fatalf("CreateRoom() error = %v", err)
+	}
+
+	joinHandler := handlers.NewJoinRequestHandler(service)
+	join := httptest.NewRequest(http.MethodPost, "/api/v1/rooms/join-requests", bytes.NewBufferString(`{"code":"`+created.Code+`","displayName":"Alex"}`))
+	joinRecorder := httptest.NewRecorder()
+	joinHandler.ServeHTTP(joinRecorder, join)
+
+	var requested struct {
+		RequestID string `json:"requestId"`
+	}
+	if err := json.NewDecoder(joinRecorder.Body).Decode(&requested); err != nil {
+		t.Fatalf("decode join response: %v", err)
+	}
+	ticket := joinRecorder.Result().Cookies()[0]
+	if ticket.Name != "reso_join_ticket" || ticket.Value == "" {
+		t.Fatalf("join ticket = %#v", ticket)
+	}
+
+	approve := httptest.NewRequest(http.MethodPost, "/approve", nil)
+	approve.SetPathValue("roomId", created.Room.ID)
+	approve.SetPathValue("requestId", requested.RequestID)
+	approve.AddCookie(&http.Cookie{Name: "reso_owner_session", Value: created.OwnerSessionToken})
+	handlers.NewApproveJoinRequestHandler(service).ServeHTTP(httptest.NewRecorder(), approve)
+
+	status := httptest.NewRequest(http.MethodGet, "/status", nil)
+	status.SetPathValue("requestId", requested.RequestID)
+	status.AddCookie(ticket)
+	statusRecorder := httptest.NewRecorder()
+	handlers.NewGuestJoinStatusHandler(service).ServeHTTP(statusRecorder, status)
+
+	if statusRecorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", statusRecorder.Code, http.StatusOK)
+	}
+	var response struct {
+		Status string `json:"status"`
+		RoomID string `json:"roomId"`
+	}
+	if err := json.NewDecoder(statusRecorder.Body).Decode(&response); err != nil {
+		t.Fatalf("decode status response: %v", err)
+	}
+	if response.Status != "approved" || response.RoomID != created.Room.ID {
+		t.Fatalf("status response = %#v", response)
+	}
+	for _, cookie := range statusRecorder.Result().Cookies() {
+		if cookie.Name == "reso_guest_session" && cookie.Value == ticket.Value {
+			return
+		}
+	}
+	t.Fatal("approved guest session cookie was not set")
+}
+
 func TestApproveJoinRequest(t *testing.T) {
 	service := rooms.NewRoomService()
 

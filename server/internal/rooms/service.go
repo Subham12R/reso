@@ -19,6 +19,7 @@ var ErrJoinRequestNotFound = errors.New("join request not found")
 var ErrRoomEnded = errors.New("room ended")
 var ErrRoomExpired = errors.New("room expired")
 var ErrReservationUnavailable = errors.New("reservation unavailable")
+var ErrParticipantNotFound = errors.New("participant not found")
 
 type RoomService struct {
 	store Store
@@ -86,13 +87,14 @@ func newRoom(ownerName string) (CreatedRoom, error) {
 	}
 
 	room := Room{
-		ID:               roomID,
-		CodeHash:         hashSecret(code),
-		OwnerSessionHash: hashSecret(ownerSessionToken),
-		OwnerName:        ownerName,
-		State:            RoomStateActive,
-		CreatedAt:        time.Now(),
-		ExpiresAt:        time.Now().Add(8 * time.Hour),
+		ID:                    roomID,
+		CodeHash:              hashSecret(code),
+		OwnerSessionHash:      hashSecret(ownerSessionToken),
+		StreamHostSessionHash: hashSecret(ownerSessionToken),
+		OwnerName:             ownerName,
+		State:                 RoomStateActive,
+		CreatedAt:             time.Now(),
+		ExpiresAt:             time.Now().Add(8 * time.Hour),
 	}
 
 	return CreatedRoom{
@@ -163,32 +165,90 @@ func (service *RoomService) RoomState(roomID string) (Room, error) {
 }
 
 func (service *RoomService) AuthorizeRoomSession(roomID, sessionToken string) (SessionRole, error) {
+	role, _, err := service.AuthorizeRoomSessionIdentity(roomID, sessionToken)
+	return role, err
+}
+
+func (service *RoomService) AuthorizeRoomSessionIdentity(roomID, sessionToken string) (SessionRole, string, error) {
 	ctx := context.Background()
 	room, err := service.store.FindRoomByID(ctx, roomID)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	if room.State != RoomStateActive || time.Now().After(room.ExpiresAt) {
-		return "", ErrRoomEnded
+		return "", "", ErrRoomEnded
 	}
-	if hashSecret(sessionToken) == room.OwnerSessionHash {
-		return SessionRoleOwner, nil
+	sessionHash := hashSecret(sessionToken)
+	if sessionHash == room.OwnerSessionHash {
+		return SessionRoleOwner, sessionIdentity(roomID, sessionHash), nil
 	}
 	requests, err := service.store.ListJoinRequests(ctx, roomID)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	for _, request := range requests {
-		if request.Status == JoinRequestApproved && hashSecret(sessionToken) == request.GuestSessionHash {
-			return SessionRoleParticipant, nil
+		if request.Status == JoinRequestApproved && sessionHash == request.GuestSessionHash {
+			return SessionRoleParticipant, sessionIdentity(roomID, sessionHash), nil
 		}
 	}
-	return "", ErrUnauthorized
+	return "", "", ErrUnauthorized
+}
+
+func (service *RoomService) TransferStreamHost(roomID, ownerSessionToken, participantID string) (Room, error) {
+	ctx := context.Background()
+	room, err := service.store.FindRoomByID(ctx, roomID)
+	if err != nil {
+		return Room{}, err
+	}
+	if room.State != RoomStateActive || time.Now().After(room.ExpiresAt) {
+		return Room{}, ErrRoomEnded
+	}
+	if hashSecret(ownerSessionToken) != room.OwnerSessionHash {
+		return Room{}, ErrUnauthorized
+	}
+	if participantID == sessionIdentity(roomID, room.OwnerSessionHash) {
+		room.StreamHostSessionHash = room.OwnerSessionHash
+	} else {
+		requests, err := service.store.ListJoinRequests(ctx, roomID)
+		if err != nil {
+			return Room{}, err
+		}
+		found := false
+		for _, request := range requests {
+			if request.Status == JoinRequestApproved && participantID == sessionIdentity(roomID, request.GuestSessionHash) {
+				room.StreamHostSessionHash, found = request.GuestSessionHash, true
+				break
+			}
+		}
+		if !found {
+			return Room{}, ErrParticipantNotFound
+		}
+	}
+	if err := service.store.UpdateRoom(ctx, room); err != nil {
+		return Room{}, err
+	}
+	return room, nil
 }
 
 func (service *RoomService) CreateJoinRequest(
 	code string,
 	name string,
+) (JoinRequest, error) {
+	return service.createJoinRequest(code, name, "")
+}
+
+func (service *RoomService) CreateGuestJoinRequest(
+	code string,
+	name string,
+	guestSessionToken string,
+) (JoinRequest, error) {
+	return service.createJoinRequest(code, name, guestSessionToken)
+}
+
+func (service *RoomService) createJoinRequest(
+	code string,
+	name string,
+	guestSessionToken string,
 ) (JoinRequest, error) {
 	room, err := service.FindRoomByCode(code)
 	if err != nil {
@@ -209,6 +269,9 @@ func (service *RoomService) CreateJoinRequest(
 		CreatedAt: createdAt,
 		ExpiresAt: createdAt.Add(2 * time.Minute),
 	}
+	if guestSessionToken != "" {
+		request.GuestSessionHash = hashSecret(guestSessionToken)
+	}
 
 	if err := service.store.CreateJoinRequest(
 		context.Background(),
@@ -217,6 +280,20 @@ func (service *RoomService) CreateJoinRequest(
 		return JoinRequest{}, err
 	}
 
+	return request, nil
+}
+
+func (service *RoomService) GuestJoinRequestStatus(requestID, guestSessionToken string) (JoinRequest, error) {
+	request, err := service.store.FindJoinRequest(context.Background(), requestID)
+	if err != nil {
+		return JoinRequest{}, ErrJoinRequestNotFound
+	}
+	if guestSessionToken == "" || request.GuestSessionHash == "" || hashSecret(guestSessionToken) != request.GuestSessionHash {
+		return JoinRequest{}, ErrUnauthorized
+	}
+	if time.Now().After(request.ExpiresAt) && request.Status == JoinRequestPending {
+		return JoinRequest{}, ErrJoinRequestExpired
+	}
 	return request, nil
 }
 
@@ -249,13 +326,16 @@ func (service *RoomService) ApproveJoinRequest(
 		return ApprovedJoinRequest{}, ErrJoinRequestExpired
 	}
 
-	sessionToken, err := generateSecret(32)
-	if err != nil {
-		return ApprovedJoinRequest{}, err
-	}
-
 	request.Status = JoinRequestApproved
-	request.GuestSessionHash = hashSecret(sessionToken)
+	sessionToken := ""
+	if request.GuestSessionHash == "" {
+		var err error
+		sessionToken, err = generateSecret(32)
+		if err != nil {
+			return ApprovedJoinRequest{}, err
+		}
+		request.GuestSessionHash = hashSecret(sessionToken)
+	}
 
 	if err := service.store.UpdateJoinRequest(ctx, request); err != nil {
 		return ApprovedJoinRequest{}, err
@@ -345,7 +425,15 @@ func generateSecret(size int) (string, error) {
 	return base64.RawURLEncoding.EncodeToString(bytes), nil
 }
 
+func NewGuestSessionToken() (string, error) {
+	return generateSecret(32)
+}
+
 func hashSecret(secret string) string {
 	sum := sha256.Sum256([]byte(secret))
 	return hex.EncodeToString(sum[:])
+}
+
+func sessionIdentity(roomID, sessionHash string) string {
+	return hashSecret(roomID + ":" + sessionHash)[:32]
 }

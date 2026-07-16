@@ -31,13 +31,18 @@ func NewMediaTokenHandler(service *rooms.RoomService, config MediaConfig) http.H
 			return
 		}
 
-		role, err := service.AuthorizeRoomSession(roomID, cookie.Value)
+		_, identity, err := service.AuthorizeRoomSessionIdentity(roomID, cookie.Value)
 		if err != nil {
 			http.Error(writer, "unauthorized", http.StatusUnauthorized)
 			return
 		}
 
-		token, err := media.IssueToken(config.APIKey, config.Secret, roomID, string(role)+"-"+roomID, role == rooms.SessionRoleOwner)
+		room, err := service.RoomState(roomID)
+		if err != nil {
+			http.Error(writer, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		token, err := media.IssueToken(config.APIKey, config.Secret, roomID, identity, room.StreamHostSessionHash == media.SessionHash(cookie.Value))
 		if err != nil {
 			http.Error(writer, "media unavailable", http.StatusServiceUnavailable)
 			return
