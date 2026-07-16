@@ -1,6 +1,7 @@
 #docs
 docs
 .agents
+.superpowers/
 
 # Secrets
 .env
