@@ -10,6 +10,7 @@ import (
 func TestLoadReadsRedisURL(t *testing.T) {
 	t.Setenv("REDIS_URL", "redis://127.0.0.1:6379/0")
 	t.Setenv("TRUST_PROXY_HEADERS", "true")
+	t.Setenv("ALLOWED_ORIGINS", "https://app.example, http://localhost:5173, *")
 
 	got, err := config.Load()
 	if err != nil {
@@ -21,6 +22,9 @@ func TestLoadReadsRedisURL(t *testing.T) {
 	}
 	if !got.TrustProxyHeaders {
 		t.Fatal("TrustProxyHeaders = false, want true")
+	}
+	if len(got.AllowedOrigins) != 2 || got.AllowedOrigins[0] != "https://app.example" || got.AllowedOrigins[1] != "http://localhost:5173" {
+		t.Fatalf("AllowedOrigins = %#v", got.AllowedOrigins)
 	}
 }
 

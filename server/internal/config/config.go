@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
@@ -14,6 +15,7 @@ type Config struct {
 	LiveKitAPIKey     string
 	LiveKitSecret     string
 	TrustProxyHeaders bool
+	AllowedOrigins    []string
 }
 
 func Load() (Config, error) {
@@ -40,5 +42,16 @@ func Load() (Config, error) {
 		LiveKitAPIKey:     os.Getenv("LIVEKIT_API_KEY"),
 		LiveKitSecret:     os.Getenv("LIVEKIT_API_SECRET"),
 		TrustProxyHeaders: trustProxyHeaders,
+		AllowedOrigins:    splitOrigins(os.Getenv("ALLOWED_ORIGINS")),
 	}, nil
+}
+
+func splitOrigins(value string) []string {
+	var origins []string
+	for _, origin := range strings.Split(value, ",") {
+		if origin = strings.TrimSpace(origin); origin != "" && origin != "*" {
+			origins = append(origins, origin)
+		}
+	}
+	return origins
 }

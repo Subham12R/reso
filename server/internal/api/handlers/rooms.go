@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/subham12r/reso/internal/realtime"
 	"github.com/subham12r/reso/internal/rooms"
 )
 
@@ -28,7 +29,7 @@ type joinRequestResponse struct {
 	Status    rooms.JoinRequestStatus `json:"status"`
 }
 
-func NewJoinRequestHandler(service *rooms.RoomService) http.Handler {
+func NewJoinRequestHandler(service *rooms.RoomService, hubs ...*realtime.Hub) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		if request.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -60,6 +61,7 @@ func NewJoinRequestHandler(service *rooms.RoomService) http.Handler {
 			)
 			return
 		}
+		publish(hubs, joinRequest.RoomID, "join.requested", joinRequest.ID, map[string]any{"requestId": joinRequest.ID, "name": joinRequest.Name, "status": joinRequest.Status})
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusAccepted)
@@ -111,7 +113,7 @@ func writeCreatedRoom(w http.ResponseWriter, created rooms.CreatedRoom) {
 	_ = json.NewEncoder(w).Encode(createRoomResponse{RoomID: created.Room.ID, Code: created.Code})
 }
 
-func NewApproveJoinRequestHandler(service *rooms.RoomService) http.Handler {
+func NewApproveJoinRequestHandler(service *rooms.RoomService, hubs ...*realtime.Hub) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		if request.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -133,6 +135,7 @@ func NewApproveJoinRequestHandler(service *rooms.RoomService) http.Handler {
 			http.Error(w, "approval unavailable", http.StatusNotFound)
 			return
 		}
+		publish(hubs, approved.Request.RoomID, "join.approved", approved.Request.ID, map[string]any{"requestId": approved.Request.ID, "name": approved.Request.Name, "status": approved.Request.Status})
 
 		http.SetCookie(w, &http.Cookie{
 			Name:     "reso_guest_session",
@@ -154,7 +157,7 @@ func NewApproveJoinRequestHandler(service *rooms.RoomService) http.Handler {
 	})
 }
 
-func NewRejectJoinRequestHandler(service *rooms.RoomService) http.Handler {
+func NewRejectJoinRequestHandler(service *rooms.RoomService, hubs ...*realtime.Hub) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		if request.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -176,6 +179,7 @@ func NewRejectJoinRequestHandler(service *rooms.RoomService) http.Handler {
 			http.Error(w, "rejection unavailable", http.StatusNotFound)
 			return
 		}
+		publish(hubs, rejected.RoomID, "join.rejected", rejected.ID, map[string]any{"requestId": rejected.ID, "name": rejected.Name, "status": rejected.Status})
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -194,7 +198,7 @@ type pendingJoinRequestResponse struct {
 	Status rooms.JoinRequestStatus `json:"status"`
 }
 
-func NewEndRoomHandler(service *rooms.RoomService) http.Handler {
+func NewEndRoomHandler(service *rooms.RoomService, hubs ...*realtime.Hub) http.Handler {
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		ownerCookie, err := request.Cookie("reso_owner_session")
 		if err != nil || ownerCookie.Value == "" {
@@ -207,12 +211,19 @@ func NewEndRoomHandler(service *rooms.RoomService) http.Handler {
 			http.Error(writer, "room unavailable", http.StatusNotFound)
 			return
 		}
+		publish(hubs, room.ID, "room.ended", "", map[string]any{"roomId": room.ID, "state": room.State})
 
 		writer.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(writer).Encode(struct {
 			State rooms.RoomState `json:"state"`
 		}{State: room.State})
 	})
+}
+
+func publish(hubs []*realtime.Hub, roomID, eventType, requestID string, payload any) {
+	if len(hubs) != 0 && hubs[0] != nil {
+		hubs[0].Publish(roomID, eventType, requestID, payload)
+	}
 }
 
 func NewRoomStateHandler(service *rooms.RoomService) http.Handler {

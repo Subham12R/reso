@@ -15,6 +15,7 @@ import (
 	"github.com/subham12r/reso/internal/api/handlers"
 	"github.com/subham12r/reso/internal/config"
 	"github.com/subham12r/reso/internal/queue"
+	"github.com/subham12r/reso/internal/realtime"
 	"github.com/subham12r/reso/internal/redisclient"
 	"github.com/subham12r/reso/internal/rooms"
 )
@@ -43,6 +44,7 @@ func run() error {
 	}
 
 	roomService := rooms.NewRoomServiceWithStore(rooms.NewRedisStore(redisClient))
+	realtimeHub := realtime.NewHub(redisClient)
 
 	server := &http.Server{
 		Addr: ":8080",
@@ -55,6 +57,8 @@ func run() error {
 				LiveKitURL:        configuration.LiveKitURL,
 				Logger:            slog.Default(),
 				TrustProxyHeaders: configuration.TrustProxyHeaders,
+				Realtime:          realtimeHub,
+				AllowedOrigins:    configuration.AllowedOrigins,
 			},
 		),
 		ReadHeaderTimeout: 5 * time.Second,

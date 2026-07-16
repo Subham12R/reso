@@ -13,6 +13,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/subham12r/reso/internal/api/handlers"
 	"github.com/subham12r/reso/internal/queue"
+	"github.com/subham12r/reso/internal/realtime"
 	"github.com/subham12r/reso/internal/rooms"
 )
 
@@ -27,6 +28,8 @@ type RouterOptions struct {
 	HTTPClient        *http.Client
 	Logger            *slog.Logger
 	TrustProxyHeaders bool
+	Realtime          *realtime.Hub
+	AllowedOrigins    []string
 }
 
 func NewRouter(roomService *rooms.RoomService, queueService *queue.Service, mediaConfig handlers.MediaConfig) http.Handler {
@@ -41,11 +44,14 @@ func NewRouterWithOptions(roomService *rooms.RoomService, queueService *queue.Se
 	router.Handle("GET /api/v1/rooms/{roomId}/join-requests", handlers.NewListPendingJoinRequestsHandler(roomService))
 	router.Handle("GET /api/v1/rooms/{roomId}/state", handlers.NewRoomStateHandler(roomService))
 	router.Handle("POST /api/v1/rooms", validateDisplayName(handlers.NewRoomHandler(roomService)))
-	router.Handle("POST /api/v1/rooms/{roomId}/end", handlers.NewEndRoomHandler(roomService))
+	router.Handle("POST /api/v1/rooms/{roomId}/end", handlers.NewEndRoomHandler(roomService, options.Realtime))
 	router.Handle("POST /api/v1/rooms/{roomId}/media/token", handlers.NewMediaTokenHandler(roomService, mediaConfig))
-	router.Handle("POST /api/v1/rooms/join-requests", validateDisplayName(handlers.NewJoinRequestHandler(roomService)))
-	router.Handle("POST /api/v1/rooms/{roomId}/join-requests/{requestId}/approve", handlers.NewApproveJoinRequestHandler(roomService))
-	router.Handle("POST /api/v1/rooms/{roomId}/join-requests/{requestId}/reject", handlers.NewRejectJoinRequestHandler(roomService))
+	router.Handle("POST /api/v1/rooms/join-requests", validateDisplayName(handlers.NewJoinRequestHandler(roomService, options.Realtime)))
+	router.Handle("POST /api/v1/rooms/{roomId}/join-requests/{requestId}/approve", handlers.NewApproveJoinRequestHandler(roomService, options.Realtime))
+	router.Handle("POST /api/v1/rooms/{roomId}/join-requests/{requestId}/reject", handlers.NewRejectJoinRequestHandler(roomService, options.Realtime))
+	if options.Realtime != nil {
+		router.Handle("GET /api/v1/rooms/{roomId}/events", handlers.NewRealtimeHandler(roomService, options.Realtime, options.AllowedOrigins))
+	}
 	if queueService != nil {
 		router.Handle("POST /api/v1/queue/join", handlers.NewQueueJoinHandler(queueService))
 		router.Handle("GET /api/v1/queue/{queueSessionId}/status", handlers.NewQueueStatusHandler(queueService))

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bufio"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -25,6 +26,14 @@ type statusWriter struct {
 	http.ResponseWriter
 	status      int
 	wroteHeader bool
+}
+
+func (writer *statusWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	hijacker, ok := writer.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, errors.New("response writer does not support hijacking")
+	}
+	return hijacker.Hijack()
 }
 
 func (writer *statusWriter) WriteHeader(status int) {
