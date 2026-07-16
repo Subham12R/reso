@@ -45,6 +45,19 @@ func TestLoadDefaultsCookiesToSecure(t *testing.T) {
 	}
 }
 
+func TestLoadReadsPort(t *testing.T) {
+	t.Setenv("REDIS_URL", "redis://127.0.0.1:6379/0")
+	t.Setenv("PORT", "9090")
+
+	got, err := config.Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if got.Port != "9090" {
+		t.Fatalf("Port = %q, want 9090", got.Port)
+	}
+}
+
 func TestLoadRejectsInvalidTrustProxyHeaders(t *testing.T) {
 	t.Setenv("REDIS_URL", "redis://127.0.0.1:6379/0")
 	t.Setenv("TRUST_PROXY_HEADERS", "sometimes")

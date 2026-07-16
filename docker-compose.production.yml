@@ -1,0 +1,26 @@
+services:
+  frontend:
+    image: ghcr.io/subham12r/reso-frontend:latest
+    depends_on:
+      - api
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-3001}:3000"
+    restart: unless-stopped
+
+  api:
+    image: ghcr.io/subham12r/reso-api:latest
+    env_file: .env.production
+    environment:
+      PORT: "8080"
+      REDIS_URL: ${REDIS_URL}
+    networks:
+      - default
+      - redis
+    ports:
+      - "127.0.0.1:${API_PORT:-8081}:8080"
+    restart: unless-stopped
+
+networks:
+  redis:
+    external: true
+    name: ${REDIS_NETWORK}

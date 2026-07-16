@@ -1,0 +1,7 @@
+.env
+.gocache
+bin
+coverage.out
+*.exe
+*.test
+tests

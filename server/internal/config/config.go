@@ -10,6 +10,7 @@ import (
 )
 
 type Config struct {
+	Port              string
 	RedisURL          string
 	LiveKitURL        string
 	LiveKitAPIKey     string
@@ -27,6 +28,10 @@ func Load() (Config, error) {
 	redisURL := os.Getenv("REDIS_URL")
 	if redisURL == "" {
 		return Config{}, errors.New("REDIS_URL not set")
+	}
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
 	}
 	trustProxyHeaders := false
 	if value := os.Getenv("TRUST_PROXY_HEADERS"); value != "" {
@@ -46,6 +51,7 @@ func Load() (Config, error) {
 	}
 
 	return Config{
+		Port:              port,
 		RedisURL:          redisURL,
 		LiveKitURL:        os.Getenv("LIVEKIT_URL"),
 		LiveKitAPIKey:     os.Getenv("LIVEKIT_API_KEY"),

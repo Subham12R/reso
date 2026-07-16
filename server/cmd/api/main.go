@@ -59,7 +59,7 @@ func run() error {
 	cookieSecure := configuration.CookieSecure
 
 	server := &http.Server{
-		Addr: ":8080",
+		Addr: ":" + configuration.Port,
 		Handler: api.NewRouterWithOptions(
 			roomService,
 			queue.NewService(redisClient),
@@ -88,7 +88,7 @@ func run() error {
 		serveErrors <- server.ListenAndServe()
 	}()
 
-	fmt.Println("Server is running on :8080")
+	fmt.Println("Server is running on " + server.Addr)
 	select {
 	case err := <-serveErrors:
 		if errors.Is(err, http.ErrServerClosed) {
