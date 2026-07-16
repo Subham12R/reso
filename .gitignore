@@ -13,7 +13,7 @@ server/bin/
 server/*.exe
 server/*.test
 server/coverage.out
-
+server/.gocache
 # Next.js
 frontend/node_modules/
 frontend/.next/
@@ -31,3 +31,5 @@ pnpm-debug.log*
 
 # Local Bruno state can contain room codes and session tokens.
 server/environments/Local.bru
+
+.gocache/
