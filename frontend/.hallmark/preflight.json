@@ -1,8 +1,0 @@
-{
-  "date": "2026-07-16",
-  "framework": "Next.js 16.2.10 App Router",
-  "fonts": ["Instrument Sans", "Instrument Serif"],
-  "palette": "existing dark properties expanded from the supplied brief",
-  "motion": "CSS-only, no animation dependency",
-  "spacing": "8px-led scale with 4px compact steps"
-}
