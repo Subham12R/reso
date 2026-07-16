@@ -90,18 +90,39 @@ func TestHubExpiresClientWithoutApplicationHeartbeat(t *testing.T) {
 	}
 	<-observer.Events()
 	<-expiring.Events()
-	if err := hub.Heartbeat(context.Background(), observer); err != nil {
-		t.Fatal(err)
-	}
+	keepAlive, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	heartbeatErr := make(chan error, 1)
+	go func() {
+		ticker := time.NewTicker(10 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-keepAlive.Done():
+				return
+			case <-ticker.C:
+				if err := hub.Heartbeat(context.Background(), observer); err != nil {
+					heartbeatErr <- err
+					return
+				}
+			}
+		}
+	}()
 
 	select {
 	case <-expiring.Done():
 	case <-time.After(time.Second):
 		t.Fatal("client remained connected after application heartbeat expiry")
 	}
-	event := <-observer.Events()
-	if event.Type != "participant.left" {
-		t.Fatalf("expiry event = %q, want participant.left", event.Type)
+	select {
+	case event := <-observer.Events():
+		if event.Type != "participant.left" {
+			t.Fatalf("expiry event = %q, want participant.left", event.Type)
+		}
+	case err := <-heartbeatErr:
+		t.Fatalf("keep observer alive: %v", err)
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for participant.left")
 	}
 }
 
