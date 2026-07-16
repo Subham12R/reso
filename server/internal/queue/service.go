@@ -21,6 +21,20 @@ const (
 )
 
 var promoteScript = redis.NewScript(`
+local expired_rooms = redis.call("ZRANGEBYSCORE", KEYS[4], "-inf", ARGV[1])
+for _, room_id in ipairs(expired_rooms) do
+  redis.call("SREM", KEYS[2], room_id)
+  redis.call("ZREM", KEYS[4], room_id)
+  local room_key = ARGV[8] .. room_id
+  local encoded_room = redis.call("GET", room_key)
+  if encoded_room then
+    local room = cjson.decode(encoded_room)
+    room.State = "ended"
+    room.EndedAt = ARGV[9]
+    redis.call("SET", room_key, cjson.encode(room))
+  end
+end
+
 local reservations = redis.call("ZRANGE", KEYS[3], 0, -1, "WITHSCORES")
 for i = 1, #reservations, 2 do
   local reservation_id = reservations[i]
@@ -184,7 +198,7 @@ func (s *Service) PromoteNext(ctx context.Context) error {
 		return err
 	}
 	now := time.Now()
-	return promoteScript.Run(ctx, s.client, []string{queueKey, "reso:rooms:active", reservationsKey}, now.UnixMilli(), now.Add(-sessionTTL).UnixMilli(), reservationID, 3, "reso:queue:", "reso:reservation:", reservationDuration.Milliseconds()).Err()
+	return promoteScript.Run(ctx, s.client, []string{queueKey, "reso:rooms:active", reservationsKey, "reso:rooms:expirations"}, now.UnixMilli(), now.Add(-sessionTTL).UnixMilli(), reservationID, 3, "reso:queue:", "reso:reservation:", reservationDuration.Milliseconds(), "reso:room:", now.Format(time.RFC3339Nano)).Err()
 }
 
 func (s *Service) removeSession(ctx context.Context, id, reservationID string) error {

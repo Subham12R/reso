@@ -11,8 +11,23 @@ import (
 
 const activeRoomsKey = "reso:rooms:active"
 const reservationsKey = "reso:reservations"
+const roomExpirationsKey = "reso:rooms:expirations"
 
 var createRoomScript = redis.NewScript(`
+local expired_rooms = redis.call("ZRANGEBYSCORE", KEYS[6], "-inf", ARGV[4])
+for _, room_id in ipairs(expired_rooms) do
+  redis.call("SREM", KEYS[1], room_id)
+  redis.call("ZREM", KEYS[6], room_id)
+  local room_key = ARGV[9] .. room_id
+  local encoded_room = redis.call("GET", room_key)
+  if encoded_room then
+    local room = cjson.decode(encoded_room)
+    room.State = "ended"
+    room.EndedAt = ARGV[10]
+    redis.call("SET", room_key, cjson.encode(room))
+  end
+end
+
 local reservations = redis.call("ZRANGE", KEYS[4], 0, -1, "WITHSCORES")
 for i = 1, #reservations, 2 do
   local reservation_id = reservations[i]
@@ -35,6 +50,26 @@ for i = 1, #reservations, 2 do
   end
 end
 
+if redis.call("SCARD", KEYS[1]) + redis.call("ZCARD", KEYS[4]) < tonumber(ARGV[3]) then
+  while true do
+    local candidate = redis.call("ZPOPMIN", KEYS[5], 1)
+    if #candidate == 0 then
+      break
+    end
+    local session_id = candidate[1]
+    local session_key = ARGV[6] .. session_id
+    local heartbeat = redis.call("HGET", session_key, "heartbeat")
+    if heartbeat and tonumber(heartbeat) >= tonumber(ARGV[5])
+      and redis.call("HGET", session_key, "status") == "waiting" then
+      redis.call("HSET", session_key, "status", "reserved", "reservationId", ARGV[11])
+      redis.call("SET", ARGV[7] .. ARGV[11], session_id, "PX", ARGV[12])
+      redis.call("ZADD", KEYS[4], ARGV[4] + ARGV[12], ARGV[11])
+      break
+    end
+    redis.call("DEL", session_key)
+  end
+end
+
 if redis.call("SCARD", KEYS[1]) + redis.call("ZCARD", KEYS[4]) >= tonumber(ARGV[3]) then
   return 0
 end
@@ -42,10 +77,27 @@ end
 redis.call("SADD", KEYS[1], ARGV[1])
 redis.call("SET", KEYS[2], ARGV[2])
 redis.call("SET", KEYS[3], ARGV[1])
+if tonumber(ARGV[8]) > 0 then
+  redis.call("ZADD", KEYS[6], ARGV[8], ARGV[1])
+end
 return 1
 `)
 
 var claimRoomScript = redis.NewScript(`
+local expired_rooms = redis.call("ZRANGEBYSCORE", KEYS[7], "-inf", ARGV[4])
+for _, room_id in ipairs(expired_rooms) do
+  redis.call("SREM", KEYS[1], room_id)
+  redis.call("ZREM", KEYS[7], room_id)
+  local room_key = ARGV[11] .. room_id
+  local encoded_room = redis.call("GET", room_key)
+  if encoded_room then
+    local room = cjson.decode(encoded_room)
+    room.State = "ended"
+    room.EndedAt = ARGV[12]
+    redis.call("SET", room_key, cjson.encode(room))
+  end
+end
+
 local reservations = redis.call("ZRANGE", KEYS[6], 0, -1, "WITHSCORES")
 for i = 1, #reservations, 2 do
   local reservation_id = reservations[i]
@@ -91,12 +143,28 @@ redis.call("ZREM", KEYS[5], ARGV[3])
 redis.call("SADD", KEYS[1], ARGV[1])
 redis.call("SET", KEYS[2], ARGV[2])
 redis.call("SET", KEYS[3], ARGV[1])
+redis.call("ZADD", KEYS[7], ARGV[10], ARGV[1])
 return 1
 `)
 
 var endRoomScript = redis.NewScript(`
+local expired_rooms = redis.call("ZRANGEBYSCORE", KEYS[5], "-inf", ARGV[3])
+for _, room_id in ipairs(expired_rooms) do
+  redis.call("SREM", KEYS[1], room_id)
+  redis.call("ZREM", KEYS[5], room_id)
+  local room_key = ARGV[10] .. room_id
+  local encoded_room = redis.call("GET", room_key)
+  if encoded_room then
+    local expired_room = cjson.decode(encoded_room)
+    expired_room.State = "ended"
+    expired_room.EndedAt = ARGV[11]
+    redis.call("SET", room_key, cjson.encode(expired_room))
+  end
+end
+
 redis.call("SET", KEYS[2], ARGV[2])
 redis.call("SREM", KEYS[1], ARGV[1])
+redis.call("ZREM", KEYS[5], ARGV[1])
 
 local reservations = redis.call("ZRANGE", KEYS[4], 0, -1, "WITHSCORES")
 for i = 1, #reservations, 2 do
@@ -156,17 +224,23 @@ func (store *RedisStore) CreateRoom(ctx context.Context, room Room) error {
 		return err
 	}
 
+	now := time.Now()
 	result, err := createRoomScript.Run(
 		ctx,
 		store.client,
-		[]string{activeRoomsKey, roomKey(room.ID), roomCodeKey(room.CodeHash), reservationsKey, "reso:queue"},
+		[]string{activeRoomsKey, roomKey(room.ID), roomCodeKey(room.CodeHash), reservationsKey, "reso:queue", roomExpirationsKey},
 		room.ID,
 		string(encodedRoom),
 		3,
-		time.Now().UnixMilli(),
-		time.Now().Add(-60*time.Second).UnixMilli(),
+		now.UnixMilli(),
+		now.Add(-60*time.Second).UnixMilli(),
 		"reso:queue:",
 		"reso:reservation:",
+		expiryScore(room.ExpiresAt),
+		"reso:room:",
+		now.Format(time.RFC3339Nano),
+		room.ID+":reservation",
+		(5 * time.Minute).Milliseconds(),
 	).Int()
 	if err != nil {
 		return err
@@ -192,7 +266,8 @@ func (store *RedisStore) ClaimRoom(ctx context.Context, room Room, queueSessionI
 		"reso:queue:" + queueSessionID,
 		"reso:queue",
 		reservationsKey,
-	}, room.ID, string(encodedRoom), queueSessionID, now.UnixMilli(), now.Add(-60*time.Second).UnixMilli(), tokenHash, "reso:queue:", "reso:reservation:", 3).Int()
+		roomExpirationsKey,
+	}, room.ID, string(encodedRoom), queueSessionID, now.UnixMilli(), now.Add(-60*time.Second).UnixMilli(), tokenHash, "reso:queue:", "reso:reservation:", 3, room.ExpiresAt.UnixMilli(), "reso:room:", now.Format(time.RFC3339Nano)).Int()
 	if err != nil {
 		return err
 	}
@@ -219,7 +294,8 @@ func (store *RedisStore) EndRoom(ctx context.Context, room Room, reservationID s
 		roomKey(room.ID),
 		"reso:queue",
 		reservationsKey,
-	}, room.ID, string(encodedRoom), now.UnixMilli(), now.Add(-60*time.Second).UnixMilli(), reservationID, (5 * time.Minute).Milliseconds(), "reso:queue:", "reso:reservation:", 3).Err()
+		roomExpirationsKey,
+	}, room.ID, string(encodedRoom), now.UnixMilli(), now.Add(-60*time.Second).UnixMilli(), reservationID, (5 * time.Minute).Milliseconds(), "reso:queue:", "reso:reservation:", 3, "reso:room:", now.Format(time.RFC3339Nano)).Err()
 }
 
 func (store *RedisStore) UpdateRoom(ctx context.Context, room Room) error {
@@ -232,10 +308,20 @@ func (store *RedisStore) UpdateRoom(ctx context.Context, room Room) error {
 		pipe.Set(ctx, roomKey(room.ID), encodedRoom, 0)
 		if room.State == RoomStateEnded {
 			pipe.SRem(ctx, activeRoomsKey, room.ID)
+			pipe.ZRem(ctx, roomExpirationsKey, room.ID)
+		} else if !room.ExpiresAt.IsZero() {
+			pipe.ZAdd(ctx, roomExpirationsKey, redis.Z{Score: float64(room.ExpiresAt.UnixMilli()), Member: room.ID})
 		}
 		return nil
 	})
 	return err
+}
+
+func expiryScore(expiry time.Time) int64 {
+	if expiry.IsZero() {
+		return 0
+	}
+	return expiry.UnixMilli()
 }
 
 func (store *RedisStore) FindRoomByCodeHash(

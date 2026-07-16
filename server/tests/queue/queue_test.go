@@ -200,6 +200,166 @@ func TestHeartbeatPromotesAfterReservedSessionDisconnects(t *testing.T) {
 	}
 }
 
+func TestCapacityPrunesUnpolledExpiredRoom(t *testing.T) {
+	client := redisClient(t)
+	store := rooms.NewRedisStore(client)
+	ctx := context.Background()
+	expired := rooms.Room{ID: "expired", CodeHash: "expired-code", State: rooms.RoomStateActive, ExpiresAt: time.Now().Add(-time.Minute)}
+	if err := store.CreateRoom(ctx, expired); err != nil {
+		t.Fatalf("expired CreateRoom() error = %v", err)
+	}
+	for i := range 2 {
+		room := rooms.Room{ID: string(rune('a' + i)), CodeHash: string(rune('x' + i)), State: rooms.RoomStateActive, ExpiresAt: time.Now().Add(time.Hour)}
+		if err := store.CreateRoom(ctx, room); err != nil {
+			t.Fatalf("active CreateRoom() error = %v", err)
+		}
+	}
+
+	replacement := rooms.Room{ID: "replacement", CodeHash: "replacement-code", State: rooms.RoomStateActive, ExpiresAt: time.Now().Add(time.Hour)}
+	if err := store.CreateRoom(ctx, replacement); err != nil {
+		t.Fatalf("replacement CreateRoom() error = %v", err)
+	}
+	got, err := store.FindRoomByID(ctx, expired.ID)
+	if err != nil {
+		t.Fatalf("FindRoomByID() error = %v", err)
+	}
+	if got.State != rooms.RoomStateEnded {
+		t.Fatalf("expired state = %q, want %q", got.State, rooms.RoomStateEnded)
+	}
+}
+
+func TestHeartbeatPrunesUnpolledExpiredRoomAndPromotes(t *testing.T) {
+	client := redisClient(t)
+	store := rooms.NewRedisStore(client)
+	queueService := queue.NewService(client)
+	ctx := context.Background()
+	roomsToCreate := []rooms.Room{
+		{ID: "expired", CodeHash: "expired-code", State: rooms.RoomStateActive, ExpiresAt: time.Now().Add(-time.Minute)},
+		{ID: "active-1", CodeHash: "active-code-1", State: rooms.RoomStateActive, ExpiresAt: time.Now().Add(time.Hour)},
+		{ID: "active-2", CodeHash: "active-code-2", State: rooms.RoomStateActive, ExpiresAt: time.Now().Add(time.Hour)},
+	}
+	for _, room := range roomsToCreate {
+		if err := store.CreateRoom(ctx, room); err != nil {
+			t.Fatalf("CreateRoom() error = %v", err)
+		}
+	}
+	session, token, err := queueService.Join(ctx)
+	if err != nil {
+		t.Fatalf("Join() error = %v", err)
+	}
+	if err := queueService.Heartbeat(ctx, session.ID, token); err != nil {
+		t.Fatalf("Heartbeat() error = %v", err)
+	}
+	status, err := queueService.Status(ctx, session.ID, token)
+	if err != nil {
+		t.Fatalf("Status() error = %v", err)
+	}
+	if status.Status != queue.Reserved {
+		t.Fatalf("status = %q, want %q", status.Status, queue.Reserved)
+	}
+}
+
+func TestDirectCapacityCheckPromotesQueueAfterRoomExpiry(t *testing.T) {
+	client := redisClient(t)
+	store := rooms.NewRedisStore(client)
+	queueService := queue.NewService(client)
+	ctx := context.Background()
+	roomsToCreate := []rooms.Room{
+		{ID: "expired", CodeHash: "expired-code", State: rooms.RoomStateActive, ExpiresAt: time.Now().Add(-time.Minute)},
+		{ID: "active-1", CodeHash: "active-code-1", State: rooms.RoomStateActive, ExpiresAt: time.Now().Add(time.Hour)},
+		{ID: "active-2", CodeHash: "active-code-2", State: rooms.RoomStateActive, ExpiresAt: time.Now().Add(time.Hour)},
+	}
+	for _, room := range roomsToCreate {
+		if err := store.CreateRoom(ctx, room); err != nil {
+			t.Fatalf("CreateRoom() error = %v", err)
+		}
+	}
+	session, token, err := queueService.Join(ctx)
+	if err != nil {
+		t.Fatalf("Join() error = %v", err)
+	}
+	replacement := rooms.Room{ID: "replacement", CodeHash: "replacement-code", State: rooms.RoomStateActive, ExpiresAt: time.Now().Add(time.Hour)}
+	if err := store.CreateRoom(ctx, replacement); !errors.Is(err, rooms.ErrRoomCapacityReached) {
+		t.Fatalf("replacement error = %v, want ErrRoomCapacityReached", err)
+	}
+	status, err := queueService.Status(ctx, session.ID, token)
+	if err != nil {
+		t.Fatalf("Status() error = %v", err)
+	}
+	if status.Status != queue.Reserved {
+		t.Fatalf("status = %q, want %q", status.Status, queue.Reserved)
+	}
+}
+
+func TestClaimRejectsWrongExpiredAndReplayedReservations(t *testing.T) {
+	t.Run("different token", func(t *testing.T) {
+		_, queueService, router, session, _ := reservedQueue(t)
+		_, otherToken, err := queueService.Join(context.Background())
+		if err != nil {
+			t.Fatalf("other Join() error = %v", err)
+		}
+		if status := claim(router, session.ID, otherToken).Code; status != http.StatusUnauthorized {
+			t.Fatalf("status = %d, want %d", status, http.StatusUnauthorized)
+		}
+	})
+
+	t.Run("expired reservation", func(t *testing.T) {
+		client, _, router, session, token := reservedQueue(t)
+		status, err := client.HGet(context.Background(), "reso:queue:"+session.ID, "reservationId").Result()
+		if err != nil {
+			t.Fatalf("reservation ID: %v", err)
+		}
+		if err := client.ZAdd(context.Background(), "reso:reservations", redis.Z{Score: float64(time.Now().Add(-time.Second).UnixMilli()), Member: status}).Err(); err != nil {
+			t.Fatalf("expire reservation: %v", err)
+		}
+		if code := claim(router, session.ID, token).Code; code == http.StatusCreated {
+			t.Fatal("expired reservation was claimed")
+		}
+	})
+
+	t.Run("replay", func(t *testing.T) {
+		_, _, router, session, token := reservedQueue(t)
+		if status := claim(router, session.ID, token).Code; status != http.StatusCreated {
+			t.Fatalf("first status = %d, want %d", status, http.StatusCreated)
+		}
+		if status := claim(router, session.ID, token).Code; status == http.StatusCreated {
+			t.Fatal("claimed reservation was replayed")
+		}
+	})
+}
+
+func reservedQueue(t *testing.T) (*redis.Client, *queue.Service, http.Handler, queue.Session, string) {
+	t.Helper()
+	client := redisClient(t)
+	roomService := rooms.NewRoomServiceWithStore(rooms.NewRedisStore(client))
+	queueService := queue.NewService(client)
+	created := make([]rooms.CreatedRoom, 3)
+	for i := range created {
+		var err error
+		created[i], err = roomService.CreateRoom("Owner")
+		if err != nil {
+			t.Fatalf("CreateRoom() error = %v", err)
+		}
+	}
+	session, token, err := queueService.Join(context.Background())
+	if err != nil {
+		t.Fatalf("Join() error = %v", err)
+	}
+	if _, err := roomService.EndRoom(created[0].Room.ID, created[0].OwnerSessionToken); err != nil {
+		t.Fatalf("EndRoom() error = %v", err)
+	}
+	return client, queueService, api.NewRouter(roomService, queueService, handlers.MediaConfig{}), session, token
+}
+
+func claim(router http.Handler, sessionID, token string) *httptest.ResponseRecorder {
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/queue/"+sessionID+"/claim", bytes.NewBufferString(`{"displayName":"Queued owner"}`))
+	request.Header.Set("Content-Type", "application/json")
+	request.AddCookie(&http.Cookie{Name: "reso_queue_session", Value: token})
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+	return recorder
+}
+
 func redisClient(t *testing.T) *redis.Client {
 	t.Helper()
 	redisURL := os.Getenv("REDIS_TEST_URL")
