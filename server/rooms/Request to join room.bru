@@ -21,6 +21,10 @@ body:json {
   }
 }
 
+script:post-response {
+  bru.setVar("requestId", res.body.requestId);
+}
+
 vars:pre-request {
   baseUrl: http://localhost:8080
   roomCode: -7q1vckq3h0
