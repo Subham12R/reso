@@ -41,7 +41,7 @@ export function RoomShell({ roomId, code, isOwner = false, onHome }: Props) {
   const [cameraOn, setCameraOn] = useState(false);
   const [micOn, setMicOn] = useState(false);
   const [pinnedIdentity, setPinnedIdentity] = useState<string | null>(null);
-  const [fullscreen, setFullscreen] = useState(false);
+  const [isFullscreen, setFullscreen] = useState(false);
   const [audioBlocked, setAudioBlocked] = useState(false);
   const [chatHidden, setChatHidden] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -233,7 +233,7 @@ export function RoomShell({ roomId, code, isOwner = false, onHome }: Props) {
         <div ref={stageRef} className="grid size-full place-items-center text-sm text-white/45">Waiting for a shared screen</div>
         <div ref={audioRef} className="hidden" />
         {pinned && <div className="absolute bottom-5 right-5 min-h-28 min-w-40 max-h-[80%] max-w-[80%] resize overflow-hidden rounded-md border border-white/25 shadow-xl"><VideoTile participant={pinned} self={pinned === room?.localParticipant} pinned onPin={() => setPinnedIdentity(null)} /></div>}
-        <button onClick={fullscreen} aria-label={fullscreen ? "Exit fullscreen" : "Enter fullscreen"} className="absolute right-5 top-5 grid size-10 place-items-center rounded-md bg-black/70"><HugeiconsIcon icon={FullScreenIcon} size={21} /></button>
+        <button onClick={fullscreen} aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"} className="absolute right-5 top-5 grid size-10 place-items-center rounded-md bg-black/70"><HugeiconsIcon icon={FullScreenIcon} size={21} /></button>
         <div className="absolute inset-x-0 bottom-5 flex justify-center gap-2">
           <button onClick={shareScreen} disabled={!canScreenShare || sharing} aria-label="Share screen" className="grid size-10 place-items-center rounded-md bg-black/70 disabled:opacity-35"><HugeiconsIcon icon={ComputerScreenShareIcon} size={21} /></button>
           <button onClick={toggleMic} aria-label="Toggle microphone" className="grid size-10 place-items-center rounded-md bg-black/70"><HugeiconsIcon icon={micOn ? Mic01Icon : MicOff01Icon} size={21} /></button>
