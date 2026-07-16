@@ -1,14 +1,38 @@
 package media_test
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/subham12r/reso/internal/api/handlers"
+	"github.com/subham12r/reso/internal/media"
 	"github.com/subham12r/reso/internal/rooms"
 )
+
+func TestTokenCarriesParticipantName(t *testing.T) {
+	token, err := media.IssueToken("key", "secret", "room", "identity", "Alex", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parts := strings.Split(token, ".")
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var claims struct {
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		t.Fatal(err)
+	}
+	if claims.Name != "Alex" {
+		t.Fatalf("name = %q, want Alex", claims.Name)
+	}
+}
 
 func TestOnlyTransferredHostCanPublish(t *testing.T) {
 	service := rooms.NewRoomService()

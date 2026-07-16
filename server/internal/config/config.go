@@ -15,6 +15,7 @@ type Config struct {
 	LiveKitAPIKey     string
 	LiveKitSecret     string
 	TrustProxyHeaders bool
+	CookieSecure      bool
 	AllowedOrigins    []string
 }
 
@@ -35,6 +36,14 @@ func Load() (Config, error) {
 			return Config{}, errors.New("TRUST_PROXY_HEADERS must be true or false")
 		}
 	}
+	cookieSecure := true
+	if value := os.Getenv("COOKIE_SECURE"); value != "" {
+		var err error
+		cookieSecure, err = strconv.ParseBool(value)
+		if err != nil {
+			return Config{}, errors.New("COOKIE_SECURE must be true or false")
+		}
+	}
 
 	return Config{
 		RedisURL:          redisURL,
@@ -42,6 +51,7 @@ func Load() (Config, error) {
 		LiveKitAPIKey:     os.Getenv("LIVEKIT_API_KEY"),
 		LiveKitSecret:     os.Getenv("LIVEKIT_API_SECRET"),
 		TrustProxyHeaders: trustProxyHeaders,
+		CookieSecure:      cookieSecure,
 		AllowedOrigins:    splitOrigins(os.Getenv("ALLOWED_ORIGINS")),
 	}, nil
 }

@@ -141,6 +141,17 @@ func (service *RoomService) EndRoom(roomID, ownerSessionToken string) (Room, err
 	return room, nil
 }
 
+func (service *RoomService) EndRoomIfActive(roomID string) (Room, error) {
+	ctx := context.Background()
+	room, err := service.store.FindRoomByID(ctx, roomID)
+	if err != nil || room.State == RoomStateEnded {
+		return room, err
+	}
+	room.State = RoomStateEnded
+	room.EndedAt = time.Now()
+	return room, service.endRoom(ctx, room)
+}
+
 func (service *RoomService) endRoom(ctx context.Context, room Room) error {
 	reservationID, err := generateSecret(16)
 	if err != nil {
@@ -165,33 +176,38 @@ func (service *RoomService) RoomState(roomID string) (Room, error) {
 }
 
 func (service *RoomService) AuthorizeRoomSession(roomID, sessionToken string) (SessionRole, error) {
-	role, _, err := service.AuthorizeRoomSessionIdentity(roomID, sessionToken)
+	role, _, _, err := service.AuthorizeRoomSessionProfile(roomID, sessionToken)
 	return role, err
 }
 
 func (service *RoomService) AuthorizeRoomSessionIdentity(roomID, sessionToken string) (SessionRole, string, error) {
+	role, identity, _, err := service.AuthorizeRoomSessionProfile(roomID, sessionToken)
+	return role, identity, err
+}
+
+func (service *RoomService) AuthorizeRoomSessionProfile(roomID, sessionToken string) (SessionRole, string, string, error) {
 	ctx := context.Background()
 	room, err := service.store.FindRoomByID(ctx, roomID)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	if room.State != RoomStateActive || time.Now().After(room.ExpiresAt) {
-		return "", "", ErrRoomEnded
+		return "", "", "", ErrRoomEnded
 	}
 	sessionHash := hashSecret(sessionToken)
 	if sessionHash == room.OwnerSessionHash {
-		return SessionRoleOwner, sessionIdentity(roomID, sessionHash), nil
+		return SessionRoleOwner, sessionIdentity(roomID, sessionHash), room.OwnerName, nil
 	}
 	requests, err := service.store.ListJoinRequests(ctx, roomID)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	for _, request := range requests {
 		if request.Status == JoinRequestApproved && sessionHash == request.GuestSessionHash {
-			return SessionRoleParticipant, sessionIdentity(roomID, sessionHash), nil
+			return SessionRoleParticipant, sessionIdentity(roomID, sessionHash), request.Name, nil
 		}
 	}
-	return "", "", ErrUnauthorized
+	return "", "", "", ErrUnauthorized
 }
 
 func (service *RoomService) TransferStreamHost(roomID, ownerSessionToken, participantID string) (Room, error) {

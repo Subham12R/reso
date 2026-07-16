@@ -31,7 +31,7 @@ func NewMediaTokenHandler(service *rooms.RoomService, config MediaConfig) http.H
 			return
 		}
 
-		_, identity, err := service.AuthorizeRoomSessionIdentity(roomID, cookie.Value)
+		_, identity, displayName, err := service.AuthorizeRoomSessionProfile(roomID, cookie.Value)
 		if err != nil {
 			http.Error(writer, "unauthorized", http.StatusUnauthorized)
 			return
@@ -42,13 +42,17 @@ func NewMediaTokenHandler(service *rooms.RoomService, config MediaConfig) http.H
 			http.Error(writer, "unauthorized", http.StatusUnauthorized)
 			return
 		}
-		token, err := media.IssueToken(config.APIKey, config.Secret, roomID, identity, room.StreamHostSessionHash == media.SessionHash(cookie.Value))
+		token, err := media.IssueToken(config.APIKey, config.Secret, roomID, identity, displayName, room.StreamHostSessionHash == media.SessionHash(cookie.Value))
 		if err != nil {
 			http.Error(writer, "media unavailable", http.StatusServiceUnavailable)
 			return
 		}
 
 		writer.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(writer).Encode(map[string]string{"url": config.URL, "token": token})
+		_ = json.NewEncoder(writer).Encode(struct {
+			URL        string `json:"url"`
+			Token      string `json:"token"`
+			CanPublish bool   `json:"canPublish"`
+		}{URL: config.URL, Token: token, CanPublish: room.StreamHostSessionHash == media.SessionHash(cookie.Value)})
 	})
 }

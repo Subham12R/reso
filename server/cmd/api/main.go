@@ -45,7 +45,18 @@ func run() error {
 	}
 
 	roomService := rooms.NewRoomServiceWithStore(rooms.NewRedisStore(redisClient))
-	realtimeHub := realtime.NewHub(redisClient)
+	cleaner := media.NewLiveKitCleaner(configuration.LiveKitURL, configuration.LiveKitAPIKey, configuration.LiveKitSecret)
+	realtimeHub := realtime.NewHubWithEmptyRoomCallback(redisClient, 5*time.Minute, func(roomID string) {
+		room, err := roomService.EndRoomIfActive(roomID)
+		if err != nil {
+			slog.Error("empty room cleanup failed", "roomId", roomID, "error", err)
+			return
+		}
+		if err := cleaner.DeleteRoom(context.Background(), room.ID); err != nil && !errors.Is(err, media.ErrRoomAbsent) {
+			slog.Error("empty LiveKit room cleanup failed", "roomId", roomID, "error", err)
+		}
+	})
+	cookieSecure := configuration.CookieSecure
 
 	server := &http.Server{
 		Addr: ":8080",
@@ -58,9 +69,10 @@ func run() error {
 				LiveKitURL:        configuration.LiveKitURL,
 				Logger:            slog.Default(),
 				TrustProxyHeaders: configuration.TrustProxyHeaders,
+				CookieSecure:      &cookieSecure,
 				Realtime:          realtimeHub,
 				AllowedOrigins:    configuration.AllowedOrigins,
-				LiveKitCleaner:    media.NewLiveKitCleaner(configuration.LiveKitURL, configuration.LiveKitAPIKey, configuration.LiveKitSecret),
+				LiveKitCleaner:    cleaner,
 			},
 		),
 		ReadHeaderTimeout: 5 * time.Second,

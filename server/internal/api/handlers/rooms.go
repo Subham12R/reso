@@ -33,6 +33,10 @@ type joinRequestResponse struct {
 }
 
 func NewJoinRequestHandler(service *rooms.RoomService, hubs ...*realtime.Hub) http.Handler {
+	return NewJoinRequestHandlerWithCookieSecure(service, true, hubs...)
+}
+
+func NewJoinRequestHandlerWithCookieSecure(service *rooms.RoomService, cookieSecure bool, hubs ...*realtime.Hub) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		if request.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -73,7 +77,7 @@ func NewJoinRequestHandler(service *rooms.RoomService, hubs ...*realtime.Hub) ht
 		publish(hubs, joinRequest.RoomID, "join.requested", joinRequest.ID, map[string]any{"requestId": joinRequest.ID, "name": joinRequest.Name, "status": joinRequest.Status})
 
 		w.Header().Set("Content-Type", "application/json")
-		http.SetCookie(w, guestJoinTicketCookie(guestToken))
+		http.SetCookie(w, guestJoinTicketCookie(guestToken, cookieSecure))
 		w.WriteHeader(http.StatusAccepted)
 
 		_ = json.NewEncoder(w).Encode(joinRequestResponse{
@@ -84,6 +88,10 @@ func NewJoinRequestHandler(service *rooms.RoomService, hubs ...*realtime.Hub) ht
 }
 
 func NewRoomHandler(service *rooms.RoomService) http.Handler {
+	return NewRoomHandlerWithCookieSecure(service, true)
+}
+
+func NewRoomHandlerWithCookieSecure(service *rooms.RoomService, cookieSecure bool) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -110,17 +118,17 @@ func NewRoomHandler(service *rooms.RoomService) http.Handler {
 			return
 		}
 
-		writeCreatedRoom(w, created)
+		writeCreatedRoom(w, created, cookieSecure)
 	})
 }
 
-func writeCreatedRoom(w http.ResponseWriter, created rooms.CreatedRoom) {
+func writeCreatedRoom(w http.ResponseWriter, created rooms.CreatedRoom, cookieSecure ...bool) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     "reso_owner_session",
 		Value:    created.OwnerSessionToken,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   secureCookie(cookieSecure),
 		SameSite: http.SameSiteLaxMode,
 	})
 	w.Header().Set("Content-Type", "application/json")
@@ -129,6 +137,10 @@ func writeCreatedRoom(w http.ResponseWriter, created rooms.CreatedRoom) {
 }
 
 func NewApproveJoinRequestHandler(service *rooms.RoomService, hubs ...*realtime.Hub) http.Handler {
+	return NewApproveJoinRequestHandlerWithCookieSecure(service, true, hubs...)
+}
+
+func NewApproveJoinRequestHandlerWithCookieSecure(service *rooms.RoomService, cookieSecure bool, hubs ...*realtime.Hub) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		if request.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -153,7 +165,7 @@ func NewApproveJoinRequestHandler(service *rooms.RoomService, hubs ...*realtime.
 		publish(hubs, approved.Request.RoomID, "join.approved", approved.Request.ID, map[string]any{"requestId": approved.Request.ID, "name": approved.Request.Name, "status": approved.Request.Status})
 
 		if approved.SessionToken != "" {
-			http.SetCookie(w, guestSessionCookie(approved.SessionToken))
+			http.SetCookie(w, guestSessionCookie(approved.SessionToken, cookieSecure))
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -168,6 +180,10 @@ func NewApproveJoinRequestHandler(service *rooms.RoomService, hubs ...*realtime.
 }
 
 func NewGuestJoinStatusHandler(service *rooms.RoomService) http.Handler {
+	return NewGuestJoinStatusHandlerWithCookieSecure(service, true)
+}
+
+func NewGuestJoinStatusHandlerWithCookieSecure(service *rooms.RoomService, cookieSecure bool) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		ticket, err := request.Cookie("reso_join_ticket")
 		if err != nil || ticket.Value == "" {
@@ -180,7 +196,7 @@ func NewGuestJoinStatusHandler(service *rooms.RoomService) http.Handler {
 			return
 		}
 		if joinRequest.Status == rooms.JoinRequestApproved {
-			http.SetCookie(w, guestSessionCookie(ticket.Value))
+			http.SetCookie(w, guestSessionCookie(ticket.Value, cookieSecure))
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(struct {
@@ -194,12 +210,16 @@ func generateGuestToken() (string, error) {
 	return rooms.NewGuestSessionToken()
 }
 
-func guestJoinTicketCookie(token string) *http.Cookie {
-	return &http.Cookie{Name: "reso_join_ticket", Value: token, Path: "/", HttpOnly: true, Secure: true, SameSite: http.SameSiteLaxMode}
+func guestJoinTicketCookie(token string, cookieSecure bool) *http.Cookie {
+	return &http.Cookie{Name: "reso_join_ticket", Value: token, Path: "/", HttpOnly: true, Secure: cookieSecure, SameSite: http.SameSiteLaxMode}
 }
 
-func guestSessionCookie(token string) *http.Cookie {
-	return &http.Cookie{Name: "reso_guest_session", Value: token, Path: "/", HttpOnly: true, Secure: true, SameSite: http.SameSiteLaxMode}
+func guestSessionCookie(token string, cookieSecure bool) *http.Cookie {
+	return &http.Cookie{Name: "reso_guest_session", Value: token, Path: "/", HttpOnly: true, Secure: cookieSecure, SameSite: http.SameSiteLaxMode}
+}
+
+func secureCookie(values []bool) bool {
+	return len(values) == 0 || values[0]
 }
 
 func NewRejectJoinRequestHandler(service *rooms.RoomService, hubs ...*realtime.Hub) http.Handler {

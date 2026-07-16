@@ -29,6 +29,7 @@ type RouterOptions struct {
 	HTTPClient        *http.Client
 	Logger            *slog.Logger
 	TrustProxyHeaders bool
+	CookieSecure      *bool
 	Realtime          *realtime.Hub
 	AllowedOrigins    []string
 	LiveKitCleaner    media.RoomCleaner
@@ -40,28 +41,32 @@ func NewRouter(roomService *rooms.RoomService, queueService *queue.Service, medi
 
 func NewRouterWithOptions(roomService *rooms.RoomService, queueService *queue.Service, mediaConfig handlers.MediaConfig, options RouterOptions) http.Handler {
 	router := http.NewServeMux()
+	cookieSecure := true
+	if options.CookieSecure != nil {
+		cookieSecure = *options.CookieSecure
+	}
 
 	router.Handle("GET /health", handlers.NewHealthHandler())
 	router.Handle("GET /ready", handlers.NewReadyHandler(options.Redis, options.LiveKitURL, options.HTTPClient))
 	router.Handle("GET /api/v1/rooms/{roomId}/join-requests", handlers.NewListPendingJoinRequestsHandler(roomService))
 	router.Handle("GET /api/v1/rooms/{roomId}/state", handlers.NewRoomStateHandler(roomService))
-	router.Handle("GET /api/v1/rooms/join-requests/{requestId}/status", handlers.NewGuestJoinStatusHandler(roomService))
-	router.Handle("POST /api/v1/rooms", validateDisplayName(handlers.NewRoomHandler(roomService)))
+	router.Handle("GET /api/v1/rooms/join-requests/{requestId}/status", handlers.NewGuestJoinStatusHandlerWithCookieSecure(roomService, cookieSecure))
+	router.Handle("POST /api/v1/rooms", validateDisplayName(handlers.NewRoomHandlerWithCookieSecure(roomService, cookieSecure)))
 	router.Handle("POST /api/v1/rooms/{roomId}/end", handlers.NewEndRoomHandlerWithCleaner(roomService, options.LiveKitCleaner, options.Realtime))
 	router.Handle("POST /api/v1/rooms/{roomId}/stream-host", handlers.NewTransferStreamHostHandler(roomService, options.Realtime))
 	router.Handle("POST /api/v1/rooms/{roomId}/media/token", handlers.NewMediaTokenHandler(roomService, mediaConfig))
-	router.Handle("POST /api/v1/rooms/join-requests", validateDisplayName(handlers.NewJoinRequestHandler(roomService, options.Realtime)))
-	router.Handle("POST /api/v1/rooms/{roomId}/join-requests/{requestId}/approve", handlers.NewApproveJoinRequestHandler(roomService, options.Realtime))
+	router.Handle("POST /api/v1/rooms/join-requests", validateDisplayName(handlers.NewJoinRequestHandlerWithCookieSecure(roomService, cookieSecure, options.Realtime)))
+	router.Handle("POST /api/v1/rooms/{roomId}/join-requests/{requestId}/approve", handlers.NewApproveJoinRequestHandlerWithCookieSecure(roomService, cookieSecure, options.Realtime))
 	router.Handle("POST /api/v1/rooms/{roomId}/join-requests/{requestId}/reject", handlers.NewRejectJoinRequestHandler(roomService, options.Realtime))
 	if options.Realtime != nil {
 		router.Handle("GET /api/v1/rooms/{roomId}/events", handlers.NewRealtimeHandler(roomService, options.Realtime, options.AllowedOrigins))
 	}
 	if queueService != nil {
-		router.Handle("POST /api/v1/queue/join", handlers.NewQueueJoinHandler(queueService))
+		router.Handle("POST /api/v1/queue/join", handlers.NewQueueJoinHandlerWithCookieSecure(queueService, cookieSecure))
 		router.Handle("GET /api/v1/queue/{queueSessionId}/status", handlers.NewQueueStatusHandler(queueService))
 		router.Handle("POST /api/v1/queue/{queueSessionId}/heartbeat", handlers.NewQueueHeartbeatHandler(queueService))
 		router.Handle("POST /api/v1/queue/{queueSessionId}/leave", handlers.NewQueueLeaveHandler(queueService))
-		router.Handle("POST /api/v1/queue/{queueSessionId}/claim", validateDisplayName(handlers.NewQueueClaimHandler(roomService)))
+		router.Handle("POST /api/v1/queue/{queueSessionId}/claim", validateDisplayName(handlers.NewQueueClaimHandlerWithCookieSecure(roomService, cookieSecure)))
 	}
 	logger := options.Logger
 	if logger == nil {

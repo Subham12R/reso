@@ -12,13 +12,17 @@ import (
 )
 
 func NewQueueJoinHandler(service *queue.Service) http.Handler {
+	return NewQueueJoinHandlerWithCookieSecure(service, true)
+}
+
+func NewQueueJoinHandlerWithCookieSecure(service *queue.Service, cookieSecure bool) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		session, token, err := service.Join(r.Context())
 		if err != nil {
 			http.Error(w, "queue unavailable", http.StatusServiceUnavailable)
 			return
 		}
-		http.SetCookie(w, &http.Cookie{Name: "reso_queue_session", Value: token, Path: "/", HttpOnly: true, Secure: true, SameSite: http.SameSiteLaxMode})
+		http.SetCookie(w, &http.Cookie{Name: "reso_queue_session", Value: token, Path: "/", HttpOnly: true, Secure: cookieSecure, SameSite: http.SameSiteLaxMode})
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(session)
 	})
@@ -49,6 +53,10 @@ func NewQueueLeaveHandler(service *queue.Service) http.Handler {
 }
 
 func NewQueueClaimHandler(service *rooms.RoomService) http.Handler {
+	return NewQueueClaimHandlerWithCookieSecure(service, true)
+}
+
+func NewQueueClaimHandlerWithCookieSecure(service *rooms.RoomService, cookieSecure bool) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie("reso_queue_session")
 		if err != nil || cookie.Value == "" {
@@ -74,7 +82,7 @@ func NewQueueClaimHandler(service *rooms.RoomService) http.Handler {
 			http.Error(w, "reservation unavailable", http.StatusConflict)
 			return
 		}
-		writeCreatedRoom(w, created)
+		writeCreatedRoom(w, created, cookieSecure)
 	})
 }
 

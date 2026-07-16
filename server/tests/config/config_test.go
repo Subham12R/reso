@@ -10,6 +10,7 @@ import (
 func TestLoadReadsRedisURL(t *testing.T) {
 	t.Setenv("REDIS_URL", "redis://127.0.0.1:6379/0")
 	t.Setenv("TRUST_PROXY_HEADERS", "true")
+	t.Setenv("COOKIE_SECURE", "false")
 	t.Setenv("ALLOWED_ORIGINS", "https://app.example, http://localhost:5173, *")
 
 	got, err := config.Load()
@@ -23,8 +24,24 @@ func TestLoadReadsRedisURL(t *testing.T) {
 	if !got.TrustProxyHeaders {
 		t.Fatal("TrustProxyHeaders = false, want true")
 	}
+	if got.CookieSecure {
+		t.Fatal("CookieSecure = true, want false")
+	}
 	if len(got.AllowedOrigins) != 2 || got.AllowedOrigins[0] != "https://app.example" || got.AllowedOrigins[1] != "http://localhost:5173" {
 		t.Fatalf("AllowedOrigins = %#v", got.AllowedOrigins)
+	}
+}
+
+func TestLoadDefaultsCookiesToSecure(t *testing.T) {
+	t.Setenv("REDIS_URL", "redis://127.0.0.1:6379/0")
+	t.Setenv("COOKIE_SECURE", "")
+
+	got, err := config.Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if !got.CookieSecure {
+		t.Fatal("CookieSecure = false, want true")
 	}
 }
 

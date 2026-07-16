@@ -71,3 +71,48 @@ all packages passed
 - One writer goroutine serializes event and ping frames; bounded client queues disconnect slow consumers.
 - HTTP events are published only after successful join-request, approval, rejection, and room-end service calls.
 - Presence entries expire after missed heartbeats and are removed on disconnect.
+
+## Important findings follow-up
+
+### RED 3: application heartbeat expiry
+
+The focused expiry test was written before the watchdog API and failed to build as expected:
+
+```text
+go test ./tests/realtime -run 'TestHubExpiresClientWithoutApplicationHeartbeat|TestSlowConsumerEvictionUsesParticipantLifecycle' -count=1
+tests/realtime/hub_test.go:70:18: undefined: realtime.NewHubWithPresenceTTL
+FAIL
+```
+
+Root cause: Redis presence expiry was passive. Protocol pong traffic could keep the socket readable forever while no application heartbeat refreshed Redis. Each joined client now has a hub-owned application-heartbeat timer. Only a successful `presence.heartbeat` resets it; expiry routes through normal lifecycle removal and closes the socket.
+
+### RED 4: slow-consumer lifecycle
+
+The slow-consumer reproduction filled one owner's bounded outbound queue while another participant kept reading. Before the fix, the slow owner closed but the observer never received `participant.left` or `stream.host.changed`.
+
+Root cause: broadcast eviction directly deleted the client and Redis presence instead of using the normal lifecycle path. Join, explicit leave, heartbeat expiry, and slow-consumer eviction now share one removal path, including lifecycle broadcasts and presence cleanup.
+
+### Added focused coverage
+
+- Application-heartbeat expiry closes the client and emits `participant.left` without relying on protocol read deadlines.
+- Slow owner eviction emits both `participant.left` and `stream.host.changed`.
+- An approved guest cookie can upgrade and receives a participant-role join envelope.
+- Successful approval, rejection, and room-end HTTP handlers publish their corresponding events.
+- The existing join-request test continues to assert that room/session secrets are absent from event payloads.
+
+### Follow-up verification
+
+```text
+REDIS_TEST_URL=redis://127.0.0.1:6379/1 go test -v ./tests/realtime -run TestRedisPresenceAtomicallyLimitsRoom -count=1
+PASS
+ok github.com/subham12r/reso/tests/realtime
+
+go test -race -v ./tests/realtime -count=1 -timeout=30s
+PASS
+ok github.com/subham12r/reso/tests/realtime
+
+go test ./... -count=1
+all packages passed
+```
+
+The first race run exposed a concurrent-map write in the in-memory test presence fake when watchdog cleanup and test cleanup overlapped. Making the fake thread-safe removed the race; no production race was reported.

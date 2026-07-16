@@ -123,6 +123,30 @@ func TestApprove(t *testing.T) {
 	}
 }
 
+func TestAuthorizedGuestSessionIncludesDisplayName(t *testing.T) {
+	service := rooms.NewRoomService()
+	created, err := service.CreateRoom("Subham")
+	if err != nil {
+		t.Fatal(err)
+	}
+	request, err := service.CreateJoinRequest(created.Code, "Alex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	approved, err := service.ApproveJoinRequest(created.Room.ID, request.ID, created.OwnerSessionToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, name, err := service.AuthorizeRoomSessionProfile(created.Room.ID, approved.SessionToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if name != "Alex" {
+		t.Fatalf("name = %q, want Alex", name)
+	}
+}
+
 func TestApproveAnotherRoom(t *testing.T) {
 	service := rooms.NewRoomService()
 

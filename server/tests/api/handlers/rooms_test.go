@@ -64,6 +64,22 @@ func TestCreateRoomHandlerReturnsCodeAndSetsOwnerCookie(t *testing.T) {
 	}
 }
 
+func TestCreateRoomHandlerAllowsInsecureDevelopmentCookie(t *testing.T) {
+	handler := handlers.NewRoomHandlerWithCookieSecure(rooms.NewRoomService(), false)
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/rooms", bytes.NewBufferString(`{"displayName":"Subham"}`))
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+
+	handler.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusCreated)
+	}
+	if recorder.Result().Cookies()[0].Secure {
+		t.Fatal("owner cookie is secure, want insecure development cookie")
+	}
+}
+
 func TestJoinRequest(t *testing.T) {
 	service := rooms.NewRoomService()
 
