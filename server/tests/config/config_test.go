@@ -9,6 +9,7 @@ import (
 
 func TestLoadReadsRedisURL(t *testing.T) {
 	t.Setenv("REDIS_URL", "redis://127.0.0.1:6379/0")
+	t.Setenv("TRUST_PROXY_HEADERS", "true")
 
 	got, err := config.Load()
 	if err != nil {
@@ -17,6 +18,17 @@ func TestLoadReadsRedisURL(t *testing.T) {
 
 	if got.RedisURL != "redis://127.0.0.1:6379/0" {
 		t.Fatalf("RedisURL = %q", got.RedisURL)
+	}
+	if !got.TrustProxyHeaders {
+		t.Fatal("TrustProxyHeaders = false, want true")
+	}
+}
+
+func TestLoadRejectsInvalidTrustProxyHeaders(t *testing.T) {
+	t.Setenv("REDIS_URL", "redis://127.0.0.1:6379/0")
+	t.Setenv("TRUST_PROXY_HEADERS", "sometimes")
+	if _, err := config.Load(); err == nil {
+		t.Fatal("Load() error = nil, want invalid TRUST_PROXY_HEADERS error")
 	}
 }
 
