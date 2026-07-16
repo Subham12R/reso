@@ -49,6 +49,10 @@ func Load() (Config, error) {
 			return Config{}, errors.New("COOKIE_SECURE must be true or false")
 		}
 	}
+	allowedOrigins := splitOrigins(os.Getenv("ALLOWED_ORIGINS"))
+	if cookieSecure && len(allowedOrigins) == 0 {
+		return Config{}, errors.New("ALLOWED_ORIGINS must be set when COOKIE_SECURE is true")
+	}
 
 	return Config{
 		Port:              port,
@@ -58,7 +62,7 @@ func Load() (Config, error) {
 		LiveKitSecret:     os.Getenv("LIVEKIT_API_SECRET"),
 		TrustProxyHeaders: trustProxyHeaders,
 		CookieSecure:      cookieSecure,
-		AllowedOrigins:    splitOrigins(os.Getenv("ALLOWED_ORIGINS")),
+		AllowedOrigins:    allowedOrigins,
 	}, nil
 }
 

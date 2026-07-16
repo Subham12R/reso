@@ -35,6 +35,7 @@ func TestLoadReadsRedisURL(t *testing.T) {
 func TestLoadDefaultsCookiesToSecure(t *testing.T) {
 	t.Setenv("REDIS_URL", "redis://127.0.0.1:6379/0")
 	t.Setenv("COOKIE_SECURE", "")
+	t.Setenv("ALLOWED_ORIGINS", "https://app.example")
 
 	got, err := config.Load()
 	if err != nil {
@@ -48,6 +49,7 @@ func TestLoadDefaultsCookiesToSecure(t *testing.T) {
 func TestLoadReadsPort(t *testing.T) {
 	t.Setenv("REDIS_URL", "redis://127.0.0.1:6379/0")
 	t.Setenv("PORT", "9090")
+	t.Setenv("COOKIE_SECURE", "false")
 
 	got, err := config.Load()
 	if err != nil {
@@ -68,7 +70,7 @@ func TestLoadRejectsInvalidTrustProxyHeaders(t *testing.T) {
 
 func TestLoadReadsRedisURLFromDotEnv(t *testing.T) {
 	t.Chdir(t.TempDir())
-	if err := os.WriteFile(".env", []byte("REDIS_URL=redis://127.0.0.1:6379/1\n"), 0o600); err != nil {
+	if err := os.WriteFile(".env", []byte("REDIS_URL=redis://127.0.0.1:6379/1\nCOOKIE_SECURE=false\n"), 0o600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
@@ -91,5 +93,15 @@ func TestLoadReadsRedisURLFromDotEnv(t *testing.T) {
 
 	if got.RedisURL != "redis://127.0.0.1:6379/1" {
 		t.Fatalf("RedisURL = %q", got.RedisURL)
+	}
+}
+
+func TestLoadRejectsSecureCookiesWithoutAllowedOrigins(t *testing.T) {
+	t.Setenv("REDIS_URL", "redis://127.0.0.1:6379/0")
+	t.Setenv("COOKIE_SECURE", "true")
+	t.Setenv("ALLOWED_ORIGINS", "")
+
+	if _, err := config.Load(); err == nil {
+		t.Fatal("Load() error = nil, want ALLOWED_ORIGINS error")
 	}
 }

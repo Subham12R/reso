@@ -152,11 +152,36 @@ func requestLimit(r *http.Request) (string, int64) {
 		return "room-create", 5
 	case r.Method == http.MethodPost && r.URL.Path == "/api/v1/rooms/join-requests":
 		return "room-join", 10
+	case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/api/v1/rooms/"):
+		return "room-action", 60
 	case strings.HasPrefix(r.URL.Path, "/api/v1/queue/"):
 		return "queue", 60
 	default:
 		return "", 0
 	}
+}
+
+func requireAllowedOrigin(next http.Handler, allowedOrigins []string) http.Handler {
+	origins := make(map[string]struct{}, len(allowedOrigins))
+	for _, origin := range allowedOrigins {
+		if origin = strings.TrimSpace(origin); origin != "" {
+			origins[origin] = struct{}{}
+		}
+	}
+	if len(origins) == 0 {
+		return next
+	}
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+			if _, allowed := origins[r.Header.Get("Origin")]; !allowed {
+				http.Error(w, "origin not allowed", http.StatusForbidden)
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func clientIP(r *http.Request, trustProxyHeaders bool) string {

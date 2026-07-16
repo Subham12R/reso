@@ -148,6 +148,7 @@ func TestRouterRateLimitsJoinAttemptsAndQueueActions(t *testing.T) {
 	}{
 		{name: "join attempts", method: http.MethodPost, path: "/api/v1/rooms/join-requests", attempts: 11},
 		{name: "queue actions", method: http.MethodPost, path: "/api/v1/queue/join", attempts: 61},
+		{name: "room actions", method: http.MethodPost, path: "/api/v1/rooms/room/end", attempts: 61},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			router := api.NewRouterWithOptions(rooms.NewRoomService(), nil, handlers.MediaConfig{}, api.RouterOptions{Redis: &fakeRedis{}})
@@ -161,6 +162,35 @@ func TestRouterRateLimitsJoinAttemptsAndQueueActions(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestRouterRejectsCrossOriginMutations(t *testing.T) {
+	router := api.NewRouterWithOptions(
+		rooms.NewRoomService(),
+		nil,
+		handlers.MediaConfig{},
+		api.RouterOptions{AllowedOrigins: []string{"https://ruse.monostack.in"}},
+	)
+
+	for _, origin := range []string{"", "https://evil.example"} {
+		request := httptest.NewRequest(http.MethodPost, "/api/v1/rooms", strings.NewReader(`{"displayName":"Alex"}`))
+		if origin != "" {
+			request.Header.Set("Origin", origin)
+		}
+		recorder := httptest.NewRecorder()
+		router.ServeHTTP(recorder, request)
+		if recorder.Code != http.StatusForbidden {
+			t.Fatalf("origin %q status = %d, want %d", origin, recorder.Code, http.StatusForbidden)
+		}
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/rooms", strings.NewReader(`{"displayName":"Alex"}`))
+	request.Header.Set("Origin", "https://ruse.monostack.in")
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("allowed origin status = %d, want %d", recorder.Code, http.StatusCreated)
 	}
 }
 

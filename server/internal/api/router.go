@@ -72,7 +72,7 @@ func NewRouterWithOptions(roomService *rooms.RoomService, queueService *queue.Se
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return requestMiddleware(limitBodies(rateLimit(router, options.Redis, options.TrustProxyHeaders)), logger)
+	return requestMiddleware(limitBodies(requireAllowedOrigin(rateLimit(router, options.Redis, options.TrustProxyHeaders), options.AllowedOrigins)), logger)
 }
 
 func validateDisplayName(next http.Handler) http.Handler {
