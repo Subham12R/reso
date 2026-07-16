@@ -1,0 +1,30 @@
+meta {
+  name: Create room
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/v1/rooms
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "displayName": "Subham"
+  }
+}
+
+script:post-response {
+  bru.setVar("roomId", res.body.roomId);
+  bru.setVar("roomCode", res.body.code);
+}
+
+vars:pre-request {
+  baseUrl: http://localhost:8080
+}

@@ -1,0 +1,27 @@
+meta {
+  name: Request to join room
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/rooms/join-requests
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "code": "{{roomCode}}",
+    "displayName": "Alex"
+  }
+}
+
+vars:pre-request {
+  baseUrl: http://localhost:8080
+  roomCode: -7q1vckq3h0
+}

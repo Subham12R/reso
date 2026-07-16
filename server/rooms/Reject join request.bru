@@ -1,0 +1,21 @@
+meta {
+  name: Reject join request
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/v1/rooms/{{roomId}}/join-requests/{{requestId}}/reject
+  body: none
+  auth: none
+}
+
+headers {
+  Cookie: reso_owner_session={{ownerSessionToken}}
+}
+
+vars:pre-request {
+  baseUrl: http://localhost:8080
+  roomId: UTgLjMRhmdtxfcd6nZPN3A
+  requestId: alyKlgM-oqq4lAwIyMuTJQ
+}
