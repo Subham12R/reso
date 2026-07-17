@@ -87,12 +87,12 @@ export function RoomShell({ roomId, code, isOwner = false, onHome }: Props) {
 
     document.addEventListener("fullscreenchange", syncFullscreen);
     liveRoom.on(RoomEvent.ParticipantConnected, sync).on(RoomEvent.ParticipantDisconnected, sync).on(RoomEvent.AudioPlaybackStatusChanged, (canPlay) => setAudioBlocked(!canPlay)).on(RoomEvent.TrackSubscribed, (track) => {
-      if (track.kind === Track.Kind.Audio && track.source === Track.Source.ScreenShareAudio && audioRef.current) {
-        clearScreenAudio();
+      if (track.kind === Track.Kind.Audio && audioRef.current) {
+        if (track.source === Track.Source.ScreenShareAudio) clearScreenAudio();
         const element = track.attach() as HTMLAudioElement;
         element.autoplay = true;
-        audioRef.current.replaceChildren(element);
-        screenAudioElementRef.current = element;
+        audioRef.current.append(element);
+        if (track.source === Track.Source.ScreenShareAudio) screenAudioElementRef.current = element;
       }
       if (track.source === Track.Source.ScreenShare && stageRef.current) {
         const element = track.attach() as HTMLVideoElement;
@@ -103,9 +103,9 @@ export function RoomShell({ roomId, code, isOwner = false, onHome }: Props) {
       }
       sync();
     }).on(RoomEvent.TrackUnsubscribed, (track) => {
-      if (track.kind === Track.Kind.Audio && track.source === Track.Source.ScreenShareAudio) {
+      if (track.kind === Track.Kind.Audio) {
         track.detach().forEach((element) => element.remove());
-        clearScreenAudio();
+        if (track.source === Track.Source.ScreenShareAudio) screenAudioElementRef.current = null;
       }
       if (track.source === Track.Source.ScreenShare && stageRef.current) stageRef.current.replaceChildren("Waiting for a shared screen");
       sync();
