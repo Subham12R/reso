@@ -22,9 +22,17 @@ func NewMediaTokenHandler(service *rooms.RoomService, config MediaConfig) http.H
 		}
 
 		roomID := request.PathValue("roomId")
+		cookieNames := []string{"reso_owner_session", "reso_guest_session"}
+		switch request.Header.Get("X-Reso-Session-Role") {
+		case "owner":
+			cookieNames = []string{"reso_owner_session"}
+		case "guest":
+			cookieNames = []string{"reso_guest_session"}
+		}
+
 		var cookie *http.Cookie
 		var identity, displayName string
-		for _, name := range []string{"reso_owner_session", "reso_guest_session"} {
+		for _, name := range cookieNames {
 			candidate, err := request.Cookie(name)
 			if err != nil || candidate.Value == "" {
 				continue

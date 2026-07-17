@@ -121,7 +121,7 @@ export function RoomShell({ roomId, code, isOwner = false, onHome }: Props) {
       if (body) setMessages((items) => [...items, { sender: participant?.name || "Guest", body }]);
     });
 
-    getMediaAccess(roomId).then(async (access) => {
+    getMediaAccess(roomId, isOwner ? "owner" : "guest").then(async (access) => {
       if (disposed) return;
       await liveRoom.connect(access.url, access.token);
       if (disposed) { liveRoom.disconnect(); return; }
@@ -133,7 +133,7 @@ export function RoomShell({ roomId, code, isOwner = false, onHome }: Props) {
     });
 
     return () => { disposed = true; document.removeEventListener("fullscreenchange", syncFullscreen); clearScreenAudio(); liveRoom.disconnect(); };
-  }, [roomId]);
+  }, [isOwner, roomId]);
 
   const connected = room?.state === ConnectionState.Connected;
 

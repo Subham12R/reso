@@ -102,3 +102,50 @@ func TestMediaTokenFallsBackToGuestSession(t *testing.T) {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusOK)
 	}
 }
+
+func TestMediaTokenUsesRequestedGuestSession(t *testing.T) {
+	service := rooms.NewRoomService()
+	created, err := service.CreateRoom("owner")
+	if err != nil {
+		t.Fatal(err)
+	}
+	guestToken := "guest-session"
+	join, err := service.CreateGuestJoinRequest(created.Code, "guest", guestToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = service.ApproveJoinRequest(created.Room.ID, join.ID, created.OwnerSessionToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, guestIdentity, err := service.AuthorizeRoomSessionIdentity(created.Room.ID, guestToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/rooms/"+created.Room.ID+"/media/token", nil)
+	request.SetPathValue("roomId", created.Room.ID)
+	request.Header.Set("X-Reso-Session-Role", "guest")
+	request.AddCookie(&http.Cookie{Name: "reso_owner_session", Value: created.OwnerSessionToken})
+	request.AddCookie(&http.Cookie{Name: "reso_guest_session", Value: guestToken})
+	recorder := httptest.NewRecorder()
+
+	handlers.NewMediaTokenHandler(service, handlers.MediaConfig{URL: "ws://livekit", APIKey: "key", Secret: "secret"}).ServeHTTP(recorder, request)
+
+	var response struct{ Token string `json:"token"` }
+	if err := json.NewDecoder(recorder.Body).Decode(&response); err != nil {
+		t.Fatal(err)
+	}
+	parts := strings.Split(response.Token, ".")
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var claims struct{ Identity string `json:"sub"` }
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		t.Fatal(err)
+	}
+	if claims.Identity != guestIdentity {
+		t.Fatalf("identity = %q, want guest identity %q", claims.Identity, guestIdentity)
+	}
+}

@@ -35,4 +35,4 @@ export const getRoomState = (roomId: string) => request<RoomState>(`/api/v1/room
 export const listPendingRequests = (roomId: string) => request<{ requests: PendingRequest[] }>(`/api/v1/rooms/${roomId}/join-requests`);
 export const decideJoin = (roomId: string, requestId: string, decision: "approve" | "reject") => request<{ status: "approved" | "rejected" }>(`/api/v1/rooms/${roomId}/join-requests/${requestId}/${decision}`, { method: "POST" });
 export const endRoom = (roomId: string) => request<{ state: "ended" }>(`/api/v1/rooms/${roomId}/end`, { method: "POST" });
-export const getMediaAccess = (roomId: string) => request<MediaAccess>(`/api/v1/rooms/${roomId}/media/token`, { method: "POST" });
+export const getMediaAccess = (roomId: string, role?: "owner" | "guest") => request<MediaAccess>(`/api/v1/rooms/${roomId}/media/token`, { method: "POST", headers: role ? { "X-Reso-Session-Role": role } : undefined });
