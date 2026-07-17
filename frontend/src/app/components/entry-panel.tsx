@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { ApiError, createRoom, requestJoin } from "../lib/api";
+import Link from "next/link";
 
 type Props = {
   initialMode: "create" | "join";
@@ -38,7 +39,7 @@ export function EntryPanel({ initialMode, onCreated, onRequested }: Props) {
         ? "That room is unavailable. Check the code and try again."
         : cause instanceof ApiError && cause.status === 409
           ? "All three room slots are in use. End an existing room, then try again."
-          : "Ruse could not reach the room service. Try again in a moment.");
+          : "Reso could not reach the room service. Try again in a moment.");
     } finally {
       setLoading(false);
     }
@@ -48,6 +49,9 @@ export function EntryPanel({ initialMode, onCreated, onRequested }: Props) {
 
     <div className="absolute inset-0 bg-gradient-to-b from-slate-950/10 via-transparent to-slate-950/55" />
     <section className="relative h-[35rem] w-full max-w-sm rounded-md border border-white/65 bg-white/82 p-7 shadow-2xl shadow-slate-950/35 backdrop-blur-xl sm:p-9">
+      <div className="flex items-center justify-center w-full text-zinc-900 text-md ">
+        Ruse   by <Link href="https://subham12r.me" className="hover:underline ml-1">{" "} Subham12R</Link>
+      </div>
       <div className="mb-7 text-center">
         <p className="mt-2 text-sm text-slate-600">Create a Watch Party. And Have the Best time!</p>
       </div>
@@ -61,8 +65,9 @@ export function EntryPanel({ initialMode, onCreated, onRequested }: Props) {
         <label className="grid gap-1.5 text-sm font-medium text-slate-700"><span>Display name</span><input value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="What should friends call you?" autoComplete="name" maxLength={50} required aria-invalid={Boolean(error) || undefined} className="h-12 rounded-xl border border-slate-300 bg-white/80 px-4 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/25" /></label>
         <p className={`min-h-5 text-center text-xs ${error ? "text-rose-600" : "text-slate-500"}`} aria-live="polite">{error || "No account or permanent profile needed."}</p>
         <button className="h-12 rounded-xl cursor-pointer bg-zinc-900 border-2 border-zinc-900 shadow-md px-4 text-sm font-semibold text-white transition hover:bg-zinc-950 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-60" disabled={loading}>{loading ? "Connecting..." : mode === "create" ? "Create private room" : "Request entry"}</button>
+      
       </form>
-  
+   
     </section>
  
   </main>
