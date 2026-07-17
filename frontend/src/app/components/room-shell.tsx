@@ -262,8 +262,8 @@ export function RoomShell({ roomId, code, isOwner = false, onHome }: Props) {
 
   const pinned = members.find((member) => member.identity === pinnedIdentity);
   const shellLayout = chatHidden ? "grid-rows-1 lg:grid-cols-1" : "grid-rows-[minmax(0,1fr)_minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_17.5rem] lg:grid-rows-1";
-  const railLayout = chatHidden ? "absolute inset-y-0 right-0 z-10 w-56" : "";
-  const participantRailLayout = chatHidden ? "min-h-0 flex-1" : "h-40 shrink-0 sm:h-56 lg:h-[19rem]";
+  const railLayout = chatHidden ? "absolute inset-y-0 right-0 z-10 w-56 flex flex-col" : "grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] grid-rows-[auto_auto_auto_minmax(0,1fr)_auto_auto] gap-2 lg:flex lg:flex-col";
+  const participantRailLayout = chatHidden ? "min-h-0 flex-1" : "min-h-0 lg:h-[19rem] lg:shrink-0";
   return <main className="h-dvh max-h-dvh overflow-hidden bg-black p-2 text-white">
     <div className={`relative grid h-[calc(100dvh-1rem)] min-h-0 max-h-[calc(100dvh-1rem)] overflow-hidden rounded-md border border-white/15 bg-[#171717] ${shellLayout}`}>
       <section ref={stageContainerRef} className="relative min-h-0 overflow-hidden bg-black">
@@ -278,14 +278,14 @@ export function RoomShell({ roomId, code, isOwner = false, onHome }: Props) {
           {audioBlocked && <button onClick={enableSharedAudio} className="rounded-md bg-black/70 px-3 text-sm">Enable shared audio</button>}
         </div>
       </section>
-      <aside className={`flex min-h-0 max-h-full flex-col gap-2 overflow-hidden border-l border-white/15 bg-[#181818] p-2 ${railLayout}`}>
+      <aside className={`min-h-0 max-h-full overflow-hidden border-l border-white/15 bg-[#181818] p-2 ${railLayout}`}>
         <section className="rounded-md border border-white/10 px-3 py-2 text-sm">{isOwner ? <>Room Code: {code}</> : "You’re in this room"}</section>
         {isOwner && pending.length > 0 && <section className="space-y-1">{pending.map((request) => <div className="rounded bg-white/5 p-2" key={request.id}>{request.name}<div className="mt-1 grid grid-cols-2 gap-1"><button onClick={() => decide(request.id, "approve")} className="bg-blue-500 py-1 rounded cursor-pointer active:scale-95 transition-all duration-300">Allow</button><button onClick={() => decide(request.id, "reject")} className="bg-red-500 py-1 rounded cursor-pointer active:scale-95 transition-all duration-300">Decline</button></div></div>)}</section>}
-        <section aria-label="Participant videos" className={`grid grid-cols-1 content-start gap-1.5 overflow-y-auto rounded-md border border-white/10 p-1.5 ${participantRailLayout}`}>{members.map((member) => <VideoTile key={member.identity} participant={member} self={member === room?.localParticipant} pinned={member.identity === pinnedIdentity} onPin={() => { setPinnedIdentity((identity) => identity === member.identity ? null : member.identity); setPinnedPosition(null); }} />)}</section>
-        <button onClick={() => setChatHidden((hidden) => !hidden)} aria-expanded={!chatHidden} className="h-8 rounded border border-white/20 text-sm">{chatHidden ? "Show chat" : "Hide chat"}</button>
-        {!chatHidden && <section className="flex min-h-0 flex-1 flex-col rounded-md border border-white/10 p-2"><p className="text-center text-sm font-medium">Room Chat</p><div className="flex-1 space-y-1 overflow-y-auto py-2">{messages.map((message, index) => <p className="rounded bg-white/5 px-2 py-1 text-xs" key={index}>{message.sender}: {message.body}</p>)}</div><form onSubmit={sendMessage} className="flex h-10 gap-2 rounded bg-white/10 px-2"><input className="min-w-0 flex-1 bg-transparent text-sm outline-none" value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Type here" /><button aria-label="Send message"><HugeiconsIcon icon={SentIcon} size={20} /></button></form></section>}
-        <p className="text-xs text-rose-300">{error}</p>
-        {isOwner ? <button onClick={closeRoom} className="h-10 rounded bg-red-500">End room</button> : <button onClick={onHome} className="h-10 rounded border border-white/20">Leave room</button>}
+        <section aria-label="Participant videos" className={`col-start-1 row-span-6 row-start-1 grid min-h-0 grid-cols-1 content-start gap-1.5 overflow-y-auto rounded-md border border-white/10 p-1.5 lg:col-auto lg:row-auto lg:row-span-1 ${participantRailLayout}`}>{members.map((member) => <VideoTile key={member.identity} participant={member} self={member === room?.localParticipant} pinned={member.identity === pinnedIdentity} onPin={() => { setPinnedIdentity((identity) => identity === member.identity ? null : member.identity); setPinnedPosition(null); }} />)}</section>
+        <button onClick={() => setChatHidden((hidden) => !hidden)} aria-expanded={!chatHidden} className="col-start-2 row-start-3 h-8 rounded border border-white/20 text-sm lg:col-auto lg:row-auto">{chatHidden ? "Show chat" : "Hide chat"}</button>
+        {!chatHidden && <section className="col-start-2 row-start-4 flex min-h-0 flex-col rounded-md border border-white/10 p-2 lg:col-auto lg:row-auto lg:flex-1"><p className="text-center text-sm font-medium">Room Chat</p><div className="flex-1 space-y-1 overflow-y-auto py-2">{messages.map((message, index) => <p className="rounded bg-white/5 px-2 py-1 text-xs" key={index}>{message.sender}: {message.body}</p>)}</div><form onSubmit={sendMessage} className="flex h-10 gap-2 rounded bg-white/10 px-2"><input className="min-w-0 flex-1 bg-transparent text-sm outline-none" value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Type here" /><button aria-label="Send message"><HugeiconsIcon icon={SentIcon} size={20} /></button></form></section>}
+        <p className="col-start-2 row-start-5 text-xs text-rose-300 lg:col-auto lg:row-auto">{error}</p>
+        {isOwner ? <button onClick={closeRoom} className="col-start-2 row-start-6 h-10 rounded bg-red-500 lg:col-auto lg:row-auto">End room</button> : <button onClick={onHome} className="col-start-2 row-start-6 h-10 rounded border border-white/20 lg:col-auto lg:row-auto">Leave room</button>}
       </aside>
     </div>
   </main>;
