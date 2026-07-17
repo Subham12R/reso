@@ -44,11 +44,14 @@ export function RoomShell({ roomId, code, isOwner = false, onHome }: Props) {
   const [isFullscreen, setFullscreen] = useState(false);
   const [audioBlocked, setAudioBlocked] = useState(false);
   const [chatHidden, setChatHidden] = useState(false);
+  const [pinnedPosition, setPinnedPosition] = useState<{ left: number; top: number } | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState("");
   const [error, setError] = useState("");
   const stageRef = useRef<HTMLDivElement>(null);
   const stageContainerRef = useRef<HTMLElement>(null);
+  const pinnedRef = useRef<HTMLDivElement>(null);
+  const pinnedDragRef = useRef<{ pointerId: number; startX: number; startY: number; left: number; top: number } | null>(null);
   const audioRef = useRef<HTMLDivElement>(null);
   const screenAudioElementRef = useRef<HTMLAudioElement | null>(null);
 
@@ -222,17 +225,51 @@ export function RoomShell({ roomId, code, isOwner = false, onHome }: Props) {
     try { await endRoom(roomId); refresh(); } catch { setError("The room could not be ended."); }
   }
 
+  function startPinnedDrag(event: React.PointerEvent<HTMLButtonElement>) {
+    const stage = stageContainerRef.current;
+    const tile = pinnedRef.current;
+    if (!stage || !tile) return;
+    const stageBounds = stage.getBoundingClientRect();
+    const tileBounds = tile.getBoundingClientRect();
+    pinnedDragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      left: pinnedPosition?.left ?? tileBounds.left - stageBounds.left,
+      top: pinnedPosition?.top ?? tileBounds.top - stageBounds.top,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function movePinnedDrag(event: React.PointerEvent<HTMLButtonElement>) {
+    const drag = pinnedDragRef.current;
+    const stage = stageContainerRef.current;
+    const tile = pinnedRef.current;
+    if (!drag || drag.pointerId !== event.pointerId || !stage || !tile) return;
+    setPinnedPosition({
+      left: Math.min(Math.max(0, drag.left + event.clientX - drag.startX), Math.max(0, stage.clientWidth - tile.offsetWidth)),
+      top: Math.min(Math.max(0, drag.top + event.clientY - drag.startY), Math.max(0, stage.clientHeight - tile.offsetHeight)),
+    });
+  }
+
+  function endPinnedDrag(event: React.PointerEvent<HTMLButtonElement>) {
+    if (pinnedDragRef.current?.pointerId !== event.pointerId) return;
+    pinnedDragRef.current = null;
+    event.currentTarget.releasePointerCapture(event.pointerId);
+  }
+
   if (roomState?.state === "ended") return <main className="grid min-h-dvh place-items-center bg-black text-white"><button onClick={onHome}>Room closed — return home</button></main>;
 
   const pinned = members.find((member) => member.identity === pinnedIdentity);
   const shellLayout = chatHidden ? "grid-rows-1 lg:grid-cols-1" : "grid-rows-[minmax(0,1fr)_minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_17.5rem] lg:grid-rows-1";
   const railLayout = chatHidden ? "absolute inset-y-0 right-0 z-10 w-56" : "";
+  const participantRailLayout = chatHidden ? "min-h-0 flex-1" : "h-40 shrink-0 sm:h-56 lg:h-[19rem]";
   return <main className="h-dvh max-h-dvh overflow-hidden bg-black p-2 text-white">
     <div className={`relative grid h-[calc(100dvh-1rem)] min-h-0 max-h-[calc(100dvh-1rem)] overflow-hidden rounded-md border border-white/15 bg-[#171717] ${shellLayout}`}>
       <section ref={stageContainerRef} className="relative min-h-0 overflow-hidden bg-black">
         <div ref={stageRef} className="grid size-full place-items-center text-sm text-white/45">Waiting for a shared screen</div>
         <div ref={audioRef} className="hidden" />
-        {pinned && <div className="absolute bottom-5 right-5 min-h-28 min-w-40 max-h-[80%] max-w-[80%] resize overflow-hidden rounded-md border border-white/25 shadow-xl"><VideoTile participant={pinned} self={pinned === room?.localParticipant} pinned onPin={() => setPinnedIdentity(null)} /></div>}
+        {pinned && <div ref={pinnedRef} style={pinnedPosition ?? undefined} className={`absolute z-20 h-36 w-64 min-h-28 min-w-40 max-h-[80%] max-w-[80%] resize overflow-hidden rounded-md border border-white/25 shadow-xl ${pinnedPosition ? "" : "bottom-5 right-5"}`}><VideoTile participant={pinned} self={pinned === room?.localParticipant} pinned onPin={() => { setPinnedIdentity(null); setPinnedPosition(null); }} /><button onPointerDown={startPinnedDrag} onPointerMove={movePinnedDrag} onPointerUp={endPinnedDrag} onPointerCancel={endPinnedDrag} aria-label="Drag pinned video" className="absolute left-1/2 top-1 z-10 h-5 w-10 -translate-x-1/2 cursor-grab touch-none rounded bg-black/70 active:cursor-grabbing" /></div>}
         <button onClick={fullscreen} aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"} className="absolute right-5 top-5 grid size-10 place-items-center rounded-md bg-black/70"><HugeiconsIcon icon={FullScreenIcon} size={21} /></button>
         <div className="absolute inset-x-0 bottom-5 flex justify-center gap-2">
           <button onClick={shareScreen} disabled={!canScreenShare || sharing} aria-label="Share screen" className="grid size-10 place-items-center rounded-md bg-black/70 disabled:opacity-35"><HugeiconsIcon icon={ComputerScreenShareIcon} size={21} /></button>
@@ -243,8 +280,8 @@ export function RoomShell({ roomId, code, isOwner = false, onHome }: Props) {
       </section>
       <aside className={`flex min-h-0 max-h-full flex-col gap-2 overflow-hidden border-l border-white/15 bg-[#181818] p-2 ${railLayout}`}>
         <section className="rounded-md border border-white/10 px-3 py-2 text-sm">{isOwner ? <>Room Code: {code}</> : "You’re in this room"}</section>
-        {isOwner && pending.length > 0 && <section className="space-y-1">{pending.map((request) => <div className="rounded bg-white/5 p-2" key={request.id}>{request.name}<div className="mt-1 grid grid-cols-2 gap-1"><button onClick={() => decide(request.id, "approve")}>Allow</button><button onClick={() => decide(request.id, "reject")}>Decline</button></div></div>)}</section>}
-        <section aria-label="Participant videos" className="grid h-40 shrink-0 grid-cols-1 content-start gap-1.5 overflow-y-auto rounded-md border border-white/10 p-1.5 sm:h-56 lg:h-[19rem]">{members.map((member) => <VideoTile key={member.identity} participant={member} self={member === room?.localParticipant} pinned={member.identity === pinnedIdentity} onPin={() => setPinnedIdentity((identity) => identity === member.identity ? null : member.identity)} />)}</section>
+        {isOwner && pending.length > 0 && <section className="space-y-1">{pending.map((request) => <div className="rounded bg-white/5 p-2" key={request.id}>{request.name}<div className="mt-1 grid grid-cols-2 gap-1"><button onClick={() => decide(request.id, "approve")} className="bg-blue-500 py-1 rounded cursor-pointer active:scale-95 transition-all duration-300">Allow</button><button onClick={() => decide(request.id, "reject")} className="bg-red-500 py-1 rounded cursor-pointer active:scale-95 transition-all duration-300">Decline</button></div></div>)}</section>}
+        <section aria-label="Participant videos" className={`grid grid-cols-1 content-start gap-1.5 overflow-y-auto rounded-md border border-white/10 p-1.5 ${participantRailLayout}`}>{members.map((member) => <VideoTile key={member.identity} participant={member} self={member === room?.localParticipant} pinned={member.identity === pinnedIdentity} onPin={() => { setPinnedIdentity((identity) => identity === member.identity ? null : member.identity); setPinnedPosition(null); }} />)}</section>
         <button onClick={() => setChatHidden((hidden) => !hidden)} aria-expanded={!chatHidden} className="h-8 rounded border border-white/20 text-sm">{chatHidden ? "Show chat" : "Hide chat"}</button>
         {!chatHidden && <section className="flex min-h-0 flex-1 flex-col rounded-md border border-white/10 p-2"><p className="text-center text-sm font-medium">Room Chat</p><div className="flex-1 space-y-1 overflow-y-auto py-2">{messages.map((message, index) => <p className="rounded bg-white/5 px-2 py-1 text-xs" key={index}>{message.sender}: {message.body}</p>)}</div><form onSubmit={sendMessage} className="flex h-10 gap-2 rounded bg-white/10 px-2"><input className="min-w-0 flex-1 bg-transparent text-sm outline-none" value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Type here" /><button aria-label="Send message"><HugeiconsIcon icon={SentIcon} size={20} /></button></form></section>}
         <p className="text-xs text-rose-300">{error}</p>
