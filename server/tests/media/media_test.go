@@ -70,3 +70,35 @@ func TestOnlyTransferredHostCanPublish(t *testing.T) {
 		t.Fatal("owner remained host")
 	}
 }
+
+func TestMediaTokenFallsBackToGuestSession(t *testing.T) {
+	service := rooms.NewRoomService()
+	ownerRoom, err := service.CreateRoom("owner")
+	if err != nil {
+		t.Fatal(err)
+	}
+	guestRoom, err := service.CreateRoom("host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	guestToken := "guest-session"
+	join, err := service.CreateGuestJoinRequest(guestRoom.Code, "guest", guestToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.ApproveJoinRequest(guestRoom.Room.ID, join.ID, guestRoom.OwnerSessionToken); err != nil {
+		t.Fatal(err)
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/rooms/"+guestRoom.Room.ID+"/media/token", nil)
+	request.SetPathValue("roomId", guestRoom.Room.ID)
+	request.AddCookie(&http.Cookie{Name: "reso_owner_session", Value: ownerRoom.OwnerSessionToken})
+	request.AddCookie(&http.Cookie{Name: "reso_guest_session", Value: guestToken})
+	recorder := httptest.NewRecorder()
+
+	handlers.NewMediaTokenHandler(service, handlers.MediaConfig{URL: "ws://livekit", APIKey: "key", Secret: "secret"}).ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusOK)
+	}
+}

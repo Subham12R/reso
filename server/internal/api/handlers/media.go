@@ -22,17 +22,20 @@ func NewMediaTokenHandler(service *rooms.RoomService, config MediaConfig) http.H
 		}
 
 		roomID := request.PathValue("roomId")
-		cookie, err := request.Cookie("reso_owner_session")
-		if err != nil {
-			cookie, err = request.Cookie("reso_guest_session")
+		var cookie *http.Cookie
+		var identity, displayName string
+		for _, name := range []string{"reso_owner_session", "reso_guest_session"} {
+			candidate, err := request.Cookie(name)
+			if err != nil || candidate.Value == "" {
+				continue
+			}
+			_, identity, displayName, err = service.AuthorizeRoomSessionProfile(roomID, candidate.Value)
+			if err == nil {
+				cookie = candidate
+				break
+			}
 		}
-		if err != nil || cookie.Value == "" {
-			http.Error(writer, "unauthorized", http.StatusUnauthorized)
-			return
-		}
-
-		_, identity, displayName, err := service.AuthorizeRoomSessionProfile(roomID, cookie.Value)
-		if err != nil {
+		if cookie == nil {
 			http.Error(writer, "unauthorized", http.StatusUnauthorized)
 			return
 		}
