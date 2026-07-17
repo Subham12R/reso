@@ -11,7 +11,7 @@ type View =
   | { kind: "guest"; roomId: string }
   | { kind: "waiting"; requestId: string };
 
-export function ResoApp() {
+export function RuseApp() {
   const [view, setView] = useState<View>({ kind: "entry", mode: "create" });
 
   if (view.kind === "owner") return <RoomShell roomId={view.roomId} code={view.code} isOwner onHome={() => setView({ kind: "entry", mode: "create" })} />;
@@ -44,9 +44,9 @@ function GuestWaiting({ requestId, onApproved, onBack }: { requestId: string; on
 
   const rejected = status === "rejected";
   return <main className="relative grid min-h-dvh place-items-center overflow-hidden bg-slate-950 bg-cover bg-center px-5 py-8 text-slate-950" style={{ backgroundImage: "linear-gradient(rgba(8, 24, 48, .28), rgba(8, 16, 29, .55)), url('/mountain-room-bg.png')" }}>
-            <p className="text-center text-lg text-slate-500 items-center mt-20 font-serif absolute left-10 top-0">reso</p>
+            <p className="text-center text-lg text-slate-500 items-center mt-20 font-serif absolute left-10 top-0">ruse</p>
     <section className="h-[30rem] w-full max-w-sm rounded-md border border-white/65 bg-white/85 p-8 text-center shadow-2xl shadow-slate-950/35 backdrop-blur-xl sm:p-10">
-      <p className="font-sans text-4xl">Reso</p>
+      <p className="font-sans text-4xl">Ruse</p>
       <p className="mt-7 text-xs font-semibold uppercase tracking-[0.18em] text-blue-600">{rejected ? "Request declined" : "Request sent"}</p>
       <h1 className="mt-3 font-sans text-4xl leading-none">{rejected ? "Not this time." : "Waiting at the door."}</h1>
       <p className="mt-4 text-sm leading-6 text-slate-600">{rejected ? "The owner declined this request. Check the code and try again." : "The owner can approve you now. This page will let you in automatically."}</p>

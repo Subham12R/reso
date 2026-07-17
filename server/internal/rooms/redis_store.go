@@ -9,9 +9,9 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-const activeRoomsKey = "reso:rooms:active"
-const reservationsKey = "reso:reservations"
-const roomExpirationsKey = "reso:rooms:expirations"
+const activeRoomsKey = "ruse:rooms:active"
+const reservationsKey = "ruse:reservations"
+const roomExpirationsKey = "ruse:rooms:expirations"
 
 var createRoomScript = redis.NewScript(`
 local expired_rooms = redis.call("ZRANGEBYSCORE", KEYS[6], "-inf", ARGV[4])
@@ -228,16 +228,16 @@ func (store *RedisStore) CreateRoom(ctx context.Context, room Room) error {
 	result, err := createRoomScript.Run(
 		ctx,
 		store.client,
-		[]string{activeRoomsKey, roomKey(room.ID), roomCodeKey(room.CodeHash), reservationsKey, "reso:queue", roomExpirationsKey},
+		[]string{activeRoomsKey, roomKey(room.ID), roomCodeKey(room.CodeHash), reservationsKey, "ruse:queue", roomExpirationsKey},
 		room.ID,
 		string(encodedRoom),
 		3,
 		now.UnixMilli(),
 		now.Add(-60*time.Second).UnixMilli(),
-		"reso:queue:",
-		"reso:reservation:",
+		"ruse:queue:",
+		"ruse:reservation:",
 		expiryScore(room.ExpiresAt),
-		"reso:room:",
+		"ruse:room:",
 		now.Format(time.RFC3339Nano),
 		room.ID+":reservation",
 		(5 * time.Minute).Milliseconds(),
@@ -263,11 +263,11 @@ func (store *RedisStore) ClaimRoom(ctx context.Context, room Room, queueSessionI
 		activeRoomsKey,
 		roomKey(room.ID),
 		roomCodeKey(room.CodeHash),
-		"reso:queue:" + queueSessionID,
-		"reso:queue",
+		"ruse:queue:" + queueSessionID,
+		"ruse:queue",
 		reservationsKey,
 		roomExpirationsKey,
-	}, room.ID, string(encodedRoom), queueSessionID, now.UnixMilli(), now.Add(-60*time.Second).UnixMilli(), tokenHash, "reso:queue:", "reso:reservation:", 3, room.ExpiresAt.UnixMilli(), "reso:room:", now.Format(time.RFC3339Nano)).Int()
+	}, room.ID, string(encodedRoom), queueSessionID, now.UnixMilli(), now.Add(-60*time.Second).UnixMilli(), tokenHash, "ruse:queue:", "ruse:reservation:", 3, room.ExpiresAt.UnixMilli(), "ruse:room:", now.Format(time.RFC3339Nano)).Int()
 	if err != nil {
 		return err
 	}
@@ -292,10 +292,10 @@ func (store *RedisStore) EndRoom(ctx context.Context, room Room, reservationID s
 	return endRoomScript.Run(ctx, store.client, []string{
 		activeRoomsKey,
 		roomKey(room.ID),
-		"reso:queue",
+		"ruse:queue",
 		reservationsKey,
 		roomExpirationsKey,
-	}, room.ID, string(encodedRoom), now.UnixMilli(), now.Add(-60*time.Second).UnixMilli(), reservationID, (5 * time.Minute).Milliseconds(), "reso:queue:", "reso:reservation:", 3, "reso:room:", now.Format(time.RFC3339Nano)).Err()
+	}, room.ID, string(encodedRoom), now.UnixMilli(), now.Add(-60*time.Second).UnixMilli(), reservationID, (5 * time.Minute).Milliseconds(), "ruse:queue:", "ruse:reservation:", 3, "ruse:room:", now.Format(time.RFC3339Nano)).Err()
 }
 
 func (store *RedisStore) UpdateRoom(ctx context.Context, room Room) error {
@@ -468,17 +468,17 @@ func (store *RedisStore) ListJoinRequests(
 }
 
 func roomKey(roomID string) string {
-	return fmt.Sprintf("reso:room:%s", roomID)
+	return fmt.Sprintf("ruse:room:%s", roomID)
 }
 
 func roomCodeKey(codeHash string) string {
-	return fmt.Sprintf("reso:room:code:%s", codeHash)
+	return fmt.Sprintf("ruse:room:code:%s", codeHash)
 }
 
 func joinRequestKey(requestID string) string {
-	return fmt.Sprintf("reso:join-request:%s", requestID)
+	return fmt.Sprintf("ruse:join-request:%s", requestID)
 }
 
 func roomJoinRequestsKey(roomID string) string {
-	return fmt.Sprintf("reso:room:%s:join-requests", roomID)
+	return fmt.Sprintf("ruse:room:%s:join-requests", roomID)
 }

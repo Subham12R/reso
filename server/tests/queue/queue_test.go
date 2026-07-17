@@ -12,10 +12,10 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
-	"github.com/subham12r/reso/internal/api"
-	"github.com/subham12r/reso/internal/api/handlers"
-	"github.com/subham12r/reso/internal/queue"
-	"github.com/subham12r/reso/internal/rooms"
+	"github.com/subham12r/ruse/internal/api"
+	"github.com/subham12r/ruse/internal/api/handlers"
+	"github.com/subham12r/ruse/internal/queue"
+	"github.com/subham12r/ruse/internal/rooms"
 )
 
 func TestClaimCreatesRoomFromCallersReservation(t *testing.T) {
@@ -42,7 +42,7 @@ func TestClaimCreatesRoomFromCallersReservation(t *testing.T) {
 	router := api.NewRouter(roomService, queueService, handlers.MediaConfig{})
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/queue/"+session.ID+"/claim", bytes.NewBufferString(`{"displayName":"Queued owner"}`))
 	request.Header.Set("Content-Type", "application/json")
-	request.AddCookie(&http.Cookie{Name: "reso_queue_session", Value: token})
+	request.AddCookie(&http.Cookie{Name: "ruse_queue_session", Value: token})
 	recorder := httptest.NewRecorder()
 	router.ServeHTTP(recorder, request)
 
@@ -60,7 +60,7 @@ func TestClaimCreatesRoomFromCallersReservation(t *testing.T) {
 		t.Fatalf("response = %#v, want room ID and code", response)
 	}
 	cookies := recorder.Result().Cookies()
-	if len(cookies) != 1 || cookies[0].Name != "reso_owner_session" || cookies[0].Value == "" || !cookies[0].HttpOnly || !cookies[0].Secure {
+	if len(cookies) != 1 || cookies[0].Name != "ruse_owner_session" || cookies[0].Value == "" || !cookies[0].HttpOnly || !cookies[0].Secure {
 		t.Fatalf("owner cookies = %#v, want secure owner cookie", cookies)
 	}
 	if _, err := queueService.Status(context.Background(), session.ID, token); !errors.Is(err, queue.ErrNotFound) {
@@ -90,7 +90,7 @@ func TestEndingRoomPromotesOldestLiveQueueSession(t *testing.T) {
 	if err != nil {
 		t.Fatalf("second Join() error = %v", err)
 	}
-	if err := client.HSet(context.Background(), "reso:queue:"+stale.ID, "heartbeat", time.Now().Add(-61*time.Second).UnixMilli()).Err(); err != nil {
+	if err := client.HSet(context.Background(), "ruse:queue:"+stale.ID, "heartbeat", time.Now().Add(-61*time.Second).UnixMilli()).Err(); err != nil {
 		t.Fatalf("age heartbeat: %v", err)
 	}
 
@@ -184,7 +184,7 @@ func TestHeartbeatPromotesAfterReservedSessionDisconnects(t *testing.T) {
 	if _, err := roomService.EndRoom(created[0].Room.ID, created[0].OwnerSessionToken); err != nil {
 		t.Fatalf("EndRoom() error = %v", err)
 	}
-	if err := client.HSet(context.Background(), "reso:queue:"+reserved.ID, "heartbeat", time.Now().Add(-61*time.Second).UnixMilli()).Err(); err != nil {
+	if err := client.HSet(context.Background(), "ruse:queue:"+reserved.ID, "heartbeat", time.Now().Add(-61*time.Second).UnixMilli()).Err(); err != nil {
 		t.Fatalf("age heartbeat: %v", err)
 	}
 
@@ -305,11 +305,11 @@ func TestClaimRejectsWrongExpiredAndReplayedReservations(t *testing.T) {
 
 	t.Run("expired reservation", func(t *testing.T) {
 		client, _, router, session, token := reservedQueue(t)
-		status, err := client.HGet(context.Background(), "reso:queue:"+session.ID, "reservationId").Result()
+		status, err := client.HGet(context.Background(), "ruse:queue:"+session.ID, "reservationId").Result()
 		if err != nil {
 			t.Fatalf("reservation ID: %v", err)
 		}
-		if err := client.ZAdd(context.Background(), "reso:reservations", redis.Z{Score: float64(time.Now().Add(-time.Second).UnixMilli()), Member: status}).Err(); err != nil {
+		if err := client.ZAdd(context.Background(), "ruse:reservations", redis.Z{Score: float64(time.Now().Add(-time.Second).UnixMilli()), Member: status}).Err(); err != nil {
 			t.Fatalf("expire reservation: %v", err)
 		}
 		if code := claim(router, session.ID, token).Code; code == http.StatusCreated {
@@ -354,7 +354,7 @@ func reservedQueue(t *testing.T) (*redis.Client, *queue.Service, http.Handler, q
 func claim(router http.Handler, sessionID, token string) *httptest.ResponseRecorder {
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/queue/"+sessionID+"/claim", bytes.NewBufferString(`{"displayName":"Queued owner"}`))
 	request.Header.Set("Content-Type", "application/json")
-	request.AddCookie(&http.Cookie{Name: "reso_queue_session", Value: token})
+	request.AddCookie(&http.Cookie{Name: "ruse_queue_session", Value: token})
 	recorder := httptest.NewRecorder()
 	router.ServeHTTP(recorder, request)
 	return recorder

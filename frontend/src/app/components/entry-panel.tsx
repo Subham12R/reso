@@ -38,7 +38,7 @@ export function EntryPanel({ initialMode, onCreated, onRequested }: Props) {
         ? "That room is unavailable. Check the code and try again."
         : cause instanceof ApiError && cause.status === 409
           ? "All three room slots are in use. End an existing room, then try again."
-          : "Reso could not reach the room service. Try again in a moment.");
+          : "Ruse could not reach the room service. Try again in a moment.");
     } finally {
       setLoading(false);
     }

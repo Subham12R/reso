@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/subham12r/reso/internal/api/handlers"
-	"github.com/subham12r/reso/internal/media"
-	"github.com/subham12r/reso/internal/rooms"
+	"github.com/subham12r/ruse/internal/api/handlers"
+	"github.com/subham12r/ruse/internal/media"
+	"github.com/subham12r/ruse/internal/rooms"
 )
 
 func TestTokenCarriesParticipantName(t *testing.T) {
@@ -55,7 +55,7 @@ func TestOnlyTransferredHostCanPublish(t *testing.T) {
 
 	transfer := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"participantId":"`+guestID+`"}`))
 	transfer.SetPathValue("roomId", created.Room.ID)
-	transfer.AddCookie(&http.Cookie{Name: "reso_owner_session", Value: created.OwnerSessionToken})
+	transfer.AddCookie(&http.Cookie{Name: "ruse_owner_session", Value: created.OwnerSessionToken})
 	recorder := httptest.NewRecorder()
 	handlers.NewTransferStreamHostHandler(service).ServeHTTP(recorder, transfer)
 	if recorder.Code != http.StatusOK {
@@ -92,8 +92,8 @@ func TestMediaTokenFallsBackToGuestSession(t *testing.T) {
 
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/rooms/"+guestRoom.Room.ID+"/media/token", nil)
 	request.SetPathValue("roomId", guestRoom.Room.ID)
-	request.AddCookie(&http.Cookie{Name: "reso_owner_session", Value: ownerRoom.OwnerSessionToken})
-	request.AddCookie(&http.Cookie{Name: "reso_guest_session", Value: guestToken})
+	request.AddCookie(&http.Cookie{Name: "ruse_owner_session", Value: ownerRoom.OwnerSessionToken})
+	request.AddCookie(&http.Cookie{Name: "ruse_guest_session", Value: guestToken})
 	recorder := httptest.NewRecorder()
 
 	handlers.NewMediaTokenHandler(service, handlers.MediaConfig{URL: "ws://livekit", APIKey: "key", Secret: "secret"}).ServeHTTP(recorder, request)
@@ -125,9 +125,9 @@ func TestMediaTokenUsesRequestedGuestSession(t *testing.T) {
 
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/rooms/"+created.Room.ID+"/media/token", nil)
 	request.SetPathValue("roomId", created.Room.ID)
-	request.Header.Set("X-Reso-Session-Role", "guest")
-	request.AddCookie(&http.Cookie{Name: "reso_owner_session", Value: created.OwnerSessionToken})
-	request.AddCookie(&http.Cookie{Name: "reso_guest_session", Value: guestToken})
+	request.Header.Set("X-Ruse-Session-Role", "guest")
+	request.AddCookie(&http.Cookie{Name: "ruse_owner_session", Value: created.OwnerSessionToken})
+	request.AddCookie(&http.Cookie{Name: "ruse_guest_session", Value: guestToken})
 	recorder := httptest.NewRecorder()
 
 	handlers.NewMediaTokenHandler(service, handlers.MediaConfig{URL: "ws://livekit", APIKey: "key", Secret: "secret"}).ServeHTTP(recorder, request)

@@ -5,7 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/subham12r/reso/internal/api/handlers"
+	"github.com/subham12r/ruse/internal/api/handlers"
 )
 
 func TestHealthHandlerReturnsOK(t *testing.T) {

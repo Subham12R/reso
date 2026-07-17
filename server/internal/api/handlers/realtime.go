@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/subham12r/reso/internal/realtime"
-	"github.com/subham12r/reso/internal/rooms"
+	"github.com/subham12r/ruse/internal/realtime"
+	"github.com/subham12r/ruse/internal/rooms"
 )
 
 const (
@@ -54,7 +54,7 @@ func NewRealtimeHandler(service *rooms.RoomService, hub *realtime.Hub, allowedOr
 }
 
 func authorizeRealtime(service *rooms.RoomService, roomID string, request *http.Request) (rooms.SessionRole, string, error) {
-	for _, name := range []string{"reso_owner_session", "reso_guest_session"} {
+	for _, name := range []string{"ruse_owner_session", "ruse_guest_session"} {
 		cookie, err := request.Cookie(name)
 		if err != nil || cookie.Value == "" {
 			continue

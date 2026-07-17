@@ -11,14 +11,14 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/subham12r/reso/internal/api"
-	"github.com/subham12r/reso/internal/api/handlers"
-	"github.com/subham12r/reso/internal/config"
-	"github.com/subham12r/reso/internal/media"
-	"github.com/subham12r/reso/internal/queue"
-	"github.com/subham12r/reso/internal/realtime"
-	"github.com/subham12r/reso/internal/redisclient"
-	"github.com/subham12r/reso/internal/rooms"
+	"github.com/subham12r/ruse/internal/api"
+	"github.com/subham12r/ruse/internal/api/handlers"
+	"github.com/subham12r/ruse/internal/config"
+	"github.com/subham12r/ruse/internal/media"
+	"github.com/subham12r/ruse/internal/queue"
+	"github.com/subham12r/ruse/internal/realtime"
+	"github.com/subham12r/ruse/internal/redisclient"
+	"github.com/subham12r/ruse/internal/rooms"
 )
 
 func main() {

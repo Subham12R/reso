@@ -6,10 +6,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/subham12r/reso/internal/api"
-	"github.com/subham12r/reso/internal/api/handlers"
-	"github.com/subham12r/reso/internal/realtime"
-	"github.com/subham12r/reso/internal/rooms"
+	"github.com/subham12r/ruse/internal/api"
+	"github.com/subham12r/ruse/internal/api/handlers"
+	"github.com/subham12r/ruse/internal/realtime"
+	"github.com/subham12r/ruse/internal/rooms"
 	"golang.org/x/net/websocket"
 )
 
@@ -30,7 +30,7 @@ func TestRouterPreservesWebSocketUpgrade(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	config.Header.Set("Cookie", (&http.Cookie{Name: "reso_owner_session", Value: created.OwnerSessionToken}).String())
+	config.Header.Set("Cookie", (&http.Cookie{Name: "ruse_owner_session", Value: created.OwnerSessionToken}).String())
 	connection, err := websocket.DialConfig(config)
 	if err != nil {
 		t.Fatalf("upgrade through router: %v", err)

@@ -92,10 +92,10 @@
 - Modify: `server/cmd/api/main.go`
 - Test: `server/tests/media/tokens_test.go`
 
-**Produces:** owner-controlled stream-host transfer, publish grants only for the active host, and LiveKit room deletion when a Reso room ends.
+**Produces:** owner-controlled stream-host transfer, publish grants only for the active host, and LiveKit room deletion when a Ruse room ends.
 
 - [ ] Persist a single stream-host session identity in room state; creator is initial host.
 - [ ] Add owner-only host-transfer endpoint and broadcast `stream.host.changed`.
 - [ ] Issue 15-minute subscribe tokens to members and screen-share publish grants only to the current host.
-- [ ] Delete the corresponding LiveKit room when Reso ends it; treat an already-absent LiveKit room as success.
+- [ ] Delete the corresponding LiveKit room when Ruse ends it; treat an already-absent LiveKit room as success.
 - [ ] Run media and full Go tests, then exercise the complete Bruno flow.

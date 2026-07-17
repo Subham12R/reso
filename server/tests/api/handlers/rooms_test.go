@@ -7,8 +7,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/subham12r/reso/internal/api/handlers"
-	"github.com/subham12r/reso/internal/rooms"
+	"github.com/subham12r/ruse/internal/api/handlers"
+	"github.com/subham12r/ruse/internal/rooms"
 )
 
 func TestCreateRoomHandlerReturnsCodeAndSetsOwnerCookie(t *testing.T) {
@@ -51,7 +51,7 @@ func TestCreateRoomHandlerReturnsCodeAndSetsOwnerCookie(t *testing.T) {
 	}
 
 	cookie := cookies[0]
-	if cookie.Name != "reso_owner_session" {
+	if cookie.Name != "ruse_owner_session" {
 		t.Fatalf("cookie name = %q", cookie.Name)
 	}
 
@@ -159,14 +159,14 @@ func TestGuestCanClaimApprovedJoinRequest(t *testing.T) {
 		t.Fatalf("decode join response: %v", err)
 	}
 	ticket := joinRecorder.Result().Cookies()[0]
-	if ticket.Name != "reso_join_ticket" || ticket.Value == "" {
+	if ticket.Name != "ruse_join_ticket" || ticket.Value == "" {
 		t.Fatalf("join ticket = %#v", ticket)
 	}
 
 	approve := httptest.NewRequest(http.MethodPost, "/approve", nil)
 	approve.SetPathValue("roomId", created.Room.ID)
 	approve.SetPathValue("requestId", requested.RequestID)
-	approve.AddCookie(&http.Cookie{Name: "reso_owner_session", Value: created.OwnerSessionToken})
+	approve.AddCookie(&http.Cookie{Name: "ruse_owner_session", Value: created.OwnerSessionToken})
 	handlers.NewApproveJoinRequestHandler(service).ServeHTTP(httptest.NewRecorder(), approve)
 
 	status := httptest.NewRequest(http.MethodGet, "/status", nil)
@@ -189,7 +189,7 @@ func TestGuestCanClaimApprovedJoinRequest(t *testing.T) {
 		t.Fatalf("status response = %#v", response)
 	}
 	for _, cookie := range statusRecorder.Result().Cookies() {
-		if cookie.Name == "reso_guest_session" && cookie.Value == ticket.Value {
+		if cookie.Name == "ruse_guest_session" && cookie.Value == ticket.Value {
 			return
 		}
 	}
@@ -219,7 +219,7 @@ func TestApproveJoinRequest(t *testing.T) {
 	request.SetPathValue("roomId", created.Room.ID)
 	request.SetPathValue("requestId", joinRequest.ID)
 	request.AddCookie(&http.Cookie{
-		Name:  "reso_owner_session",
+		Name:  "ruse_owner_session",
 		Value: created.OwnerSessionToken,
 	})
 
@@ -236,7 +236,7 @@ func TestApproveJoinRequest(t *testing.T) {
 	}
 
 	cookie := cookies[0]
-	if cookie.Name != "reso_guest_session" {
+	if cookie.Name != "ruse_guest_session" {
 		t.Fatalf("cookie name = %q", cookie.Name)
 	}
 
@@ -272,7 +272,7 @@ func TestRejectJoinRequest(t *testing.T) {
 	request.SetPathValue("roomId", created.Room.ID)
 	request.SetPathValue("requestId", joinRequest.ID)
 	request.AddCookie(&http.Cookie{
-		Name:  "reso_owner_session",
+		Name:  "ruse_owner_session",
 		Value: created.OwnerSessionToken,
 	})
 
@@ -318,7 +318,7 @@ func TestListSafeRequests(t *testing.T) {
 	)
 	request.SetPathValue("roomId", created.Room.ID)
 	request.AddCookie(&http.Cookie{
-		Name:  "reso_owner_session",
+		Name:  "ruse_owner_session",
 		Value: created.OwnerSessionToken,
 	})
 

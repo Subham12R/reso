@@ -14,8 +14,8 @@ import (
 )
 
 const (
-	queueKey            = "reso:queue"
-	reservationsKey     = "reso:reservations"
+	queueKey            = "ruse:queue"
+	reservationsKey     = "ruse:reservations"
 	sessionTTL          = 60 * time.Second
 	reservationDuration = 5 * time.Minute
 )
@@ -198,7 +198,7 @@ func (s *Service) PromoteNext(ctx context.Context) error {
 		return err
 	}
 	now := time.Now()
-	return promoteScript.Run(ctx, s.client, []string{queueKey, "reso:rooms:active", reservationsKey, "reso:rooms:expirations"}, now.UnixMilli(), now.Add(-sessionTTL).UnixMilli(), reservationID, 3, "reso:queue:", "reso:reservation:", reservationDuration.Milliseconds(), "reso:room:", now.Format(time.RFC3339Nano)).Err()
+	return promoteScript.Run(ctx, s.client, []string{queueKey, "ruse:rooms:active", reservationsKey, "ruse:rooms:expirations"}, now.UnixMilli(), now.Add(-sessionTTL).UnixMilli(), reservationID, 3, "ruse:queue:", "ruse:reservation:", reservationDuration.Milliseconds(), "ruse:room:", now.Format(time.RFC3339Nano)).Err()
 }
 
 func (s *Service) removeSession(ctx context.Context, id, reservationID string) error {
@@ -214,8 +214,8 @@ func (s *Service) removeSession(ctx context.Context, id, reservationID string) e
 	return err
 }
 
-func sessionKey(id string) string     { return "reso:queue:" + id }
-func reservationKey(id string) string { return "reso:reservation:" + id }
+func sessionKey(id string) string     { return "ruse:queue:" + id }
+func reservationKey(id string) string { return "ruse:reservation:" + id }
 func secret(size int) (string, error) {
 	b := make([]byte, size)
 	_, err := rand.Read(b)

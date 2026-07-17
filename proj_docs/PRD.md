@@ -1,8 +1,8 @@
-# Reso Product Requirements
+# Ruse Product Requirements
 
 ## Product
 
-Reso is a private, temporary browser room for sharing a screen with a small group. Rooms have no accounts, no recording, and require the owner to approve each join request.
+Ruse is a private, temporary browser room for sharing a screen with a small group. Rooms have no accounts, no recording, and require the owner to approve each join request.
 
 ## V1 goals
 
@@ -44,7 +44,7 @@ Reso is a private, temporary browser room for sharing a screen with a small grou
 
 - Accounts or social profiles.
 - Recording, transcription, or permanent chat history.
-- Media transcoding by Reso.
+- Media transcoding by Ruse.
 
 ## Acceptance checks
 

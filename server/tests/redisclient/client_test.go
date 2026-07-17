@@ -3,7 +3,7 @@ package redisclient_test
 import (
 	"testing"
 
-	"github.com/subham12r/reso/internal/redisclient"
+	"github.com/subham12r/ruse/internal/redisclient"
 )
 
 func TestNewParsesRedisURL(t *testing.T) {

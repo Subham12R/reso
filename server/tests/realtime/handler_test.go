@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/subham12r/reso/internal/api/handlers"
-	"github.com/subham12r/reso/internal/realtime"
-	"github.com/subham12r/reso/internal/rooms"
+	"github.com/subham12r/ruse/internal/api/handlers"
+	"github.com/subham12r/ruse/internal/realtime"
+	"github.com/subham12r/ruse/internal/rooms"
 	"golang.org/x/net/websocket"
 )
 
@@ -37,7 +37,7 @@ func TestRealtimeRejectsUnauthorizedAndDisallowedOriginsBeforeUpgrade(t *testing
 	request = httptest.NewRequest(http.MethodGet, "/api/v1/rooms/"+created.Room.ID+"/events", nil)
 	request.SetPathValue("roomId", created.Room.ID)
 	request.Header.Set("Origin", "https://evil.example")
-	request.AddCookie(&http.Cookie{Name: "reso_owner_session", Value: created.OwnerSessionToken})
+	request.AddCookie(&http.Cookie{Name: "ruse_owner_session", Value: created.OwnerSessionToken})
 	recorder = httptest.NewRecorder()
 	handler.ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusForbidden {
@@ -61,7 +61,7 @@ func TestRealtimeOwnerConnectsAndRequestsRoomState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	config.Header.Set("Cookie", (&http.Cookie{Name: "reso_owner_session", Value: created.OwnerSessionToken}).String())
+	config.Header.Set("Cookie", (&http.Cookie{Name: "ruse_owner_session", Value: created.OwnerSessionToken}).String())
 	connection, err := websocket.DialConfig(config)
 	if err != nil {
 		t.Fatal(err)
@@ -99,7 +99,7 @@ func TestRealtimeRejectsUnsupportedClientEvent(t *testing.T) {
 	server := httptest.NewServer(mux)
 	defer server.Close()
 	config, _ := websocket.NewConfig("ws"+strings.TrimPrefix(server.URL, "http")+"/api/v1/rooms/"+created.Room.ID+"/events", "http://localhost:5173")
-	config.Header.Set("Cookie", (&http.Cookie{Name: "reso_owner_session", Value: created.OwnerSessionToken}).String())
+	config.Header.Set("Cookie", (&http.Cookie{Name: "ruse_owner_session", Value: created.OwnerSessionToken}).String())
 	connection, err := websocket.DialConfig(config)
 	if err != nil {
 		t.Fatal(err)
@@ -169,7 +169,7 @@ func TestApprovedGuestCanUpgrade(t *testing.T) {
 	defer server.Close()
 
 	config, _ := websocket.NewConfig("ws"+strings.TrimPrefix(server.URL, "http")+"/api/v1/rooms/"+created.Room.ID+"/events", "http://localhost:5173")
-	config.Header.Set("Cookie", (&http.Cookie{Name: "reso_guest_session", Value: approved.SessionToken}).String())
+	config.Header.Set("Cookie", (&http.Cookie{Name: "ruse_guest_session", Value: approved.SessionToken}).String())
 	connection, err := websocket.DialConfig(config)
 	if err != nil {
 		t.Fatal(err)
@@ -204,7 +204,7 @@ func TestRoomMutationHandlersPublishAfterSuccess(t *testing.T) {
 	request := httptest.NewRequest(http.MethodPost, "/approve", nil)
 	request.SetPathValue("roomId", created.Room.ID)
 	request.SetPathValue("requestId", approveRequest.ID)
-	request.AddCookie(&http.Cookie{Name: "reso_owner_session", Value: created.OwnerSessionToken})
+	request.AddCookie(&http.Cookie{Name: "ruse_owner_session", Value: created.OwnerSessionToken})
 	recorder := httptest.NewRecorder()
 	handlers.NewApproveJoinRequestHandler(service, hub).ServeHTTP(recorder, request)
 	assertEventType(t, owner, "join.approved")
@@ -213,14 +213,14 @@ func TestRoomMutationHandlersPublishAfterSuccess(t *testing.T) {
 	request = httptest.NewRequest(http.MethodPost, "/reject", nil)
 	request.SetPathValue("roomId", created.Room.ID)
 	request.SetPathValue("requestId", rejectRequest.ID)
-	request.AddCookie(&http.Cookie{Name: "reso_owner_session", Value: created.OwnerSessionToken})
+	request.AddCookie(&http.Cookie{Name: "ruse_owner_session", Value: created.OwnerSessionToken})
 	recorder = httptest.NewRecorder()
 	handlers.NewRejectJoinRequestHandler(service, hub).ServeHTTP(recorder, request)
 	assertEventType(t, owner, "join.rejected")
 
 	request = httptest.NewRequest(http.MethodPost, "/end", nil)
 	request.SetPathValue("roomId", created.Room.ID)
-	request.AddCookie(&http.Cookie{Name: "reso_owner_session", Value: created.OwnerSessionToken})
+	request.AddCookie(&http.Cookie{Name: "ruse_owner_session", Value: created.OwnerSessionToken})
 	recorder = httptest.NewRecorder()
 	handlers.NewEndRoomHandler(service, hub).ServeHTTP(recorder, request)
 	assertEventType(t, owner, "room.ended")

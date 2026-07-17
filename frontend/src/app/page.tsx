@@ -1,5 +1,5 @@
-import { ResoApp } from "./components/reso-app";
+import { RuseApp } from "./components/ruse-app";
 
 export default function Home() {
-  return <ResoApp />;
+  return <RuseApp />;
 }

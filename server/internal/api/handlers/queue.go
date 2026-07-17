@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/subham12r/reso/internal/queue"
-	"github.com/subham12r/reso/internal/rooms"
+	"github.com/subham12r/ruse/internal/queue"
+	"github.com/subham12r/ruse/internal/rooms"
 )
 
 func NewQueueJoinHandler(service *queue.Service) http.Handler {
@@ -22,7 +22,7 @@ func NewQueueJoinHandlerWithCookieSecure(service *queue.Service, cookieSecure bo
 			http.Error(w, "queue unavailable", http.StatusServiceUnavailable)
 			return
 		}
-		http.SetCookie(w, &http.Cookie{Name: "reso_queue_session", Value: token, Path: "/", HttpOnly: true, Secure: cookieSecure, SameSite: http.SameSiteLaxMode})
+		http.SetCookie(w, &http.Cookie{Name: "ruse_queue_session", Value: token, Path: "/", HttpOnly: true, Secure: cookieSecure, SameSite: http.SameSiteLaxMode})
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(session)
 	})
@@ -30,7 +30,7 @@ func NewQueueJoinHandlerWithCookieSecure(service *queue.Service, cookieSecure bo
 
 func NewQueueStatusHandler(service *queue.Service) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		cookie, err := r.Cookie("reso_queue_session")
+		cookie, err := r.Cookie("ruse_queue_session")
 		if err != nil {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -58,7 +58,7 @@ func NewQueueClaimHandler(service *rooms.RoomService) http.Handler {
 
 func NewQueueClaimHandlerWithCookieSecure(service *rooms.RoomService, cookieSecure bool) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		cookie, err := r.Cookie("reso_queue_session")
+		cookie, err := r.Cookie("ruse_queue_session")
 		if err != nil || cookie.Value == "" {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -88,7 +88,7 @@ func NewQueueClaimHandlerWithCookieSecure(service *rooms.RoomService, cookieSecu
 
 func queueAction(action func(context.Context, string, string) error) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		cookie, err := r.Cookie("reso_queue_session")
+		cookie, err := r.Cookie("ruse_queue_session")
 		if err != nil {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return

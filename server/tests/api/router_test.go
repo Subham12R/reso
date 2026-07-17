@@ -6,9 +6,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/subham12r/reso/internal/api"
-	"github.com/subham12r/reso/internal/api/handlers"
-	"github.com/subham12r/reso/internal/rooms"
+	"github.com/subham12r/ruse/internal/api"
+	"github.com/subham12r/ruse/internal/api/handlers"
+	"github.com/subham12r/ruse/internal/rooms"
 )
 
 func TestRouterRoutesRoomCreation(t *testing.T) {
@@ -78,7 +78,7 @@ func TestRouterRoutesJoinApproval(t *testing.T) {
 		nil,
 	)
 	request.AddCookie(&http.Cookie{
-		Name:  "reso_owner_session",
+		Name:  "ruse_owner_session",
 		Value: created.OwnerSessionToken,
 	})
 
@@ -112,7 +112,7 @@ func TestRouterRoutesJoinRejection(t *testing.T) {
 		nil,
 	)
 	request.AddCookie(&http.Cookie{
-		Name:  "reso_owner_session",
+		Name:  "ruse_owner_session",
 		Value: created.OwnerSessionToken,
 	})
 
@@ -140,7 +140,7 @@ func TestRouterRoutesPendingJoinRequestList(t *testing.T) {
 		nil,
 	)
 	request.AddCookie(&http.Cookie{
-		Name:  "reso_owner_session",
+		Name:  "ruse_owner_session",
 		Value: created.OwnerSessionToken,
 	})
 

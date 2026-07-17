@@ -1,6 +1,6 @@
-# Reso
+# Ruse
 
-Reso is a private, temporary room for small-group screen sharing. Create a room, share its code, approve people as they arrive, then collaborate over screen share, camera, microphone, and ephemeral chat without accounts, recordings, or persistent chat history.
+Ruse is a private, temporary room for small-group screen sharing. Create a room, share its code, approve people as they arrive, then collaborate over screen share, camera, microphone, and ephemeral chat without accounts, recordings, or persistent chat history.
 
 **Live:** [ruse.monostack.in](https://ruse.monostack.in) | **Health:** [ruseapi.monostack.in/health](https://ruseapi.monostack.in/health)
 
@@ -115,7 +115,7 @@ The GitHub Actions workflow publishes API and frontend images to GHCR after chan
 - Session cookies are `HttpOnly`, `Secure` in production, and `SameSite=Lax`.
 - Secure-cookie deployments require an explicit `ALLOWED_ORIGINS` list; unsafe requests from other origins are rejected.
 - LiveKit access tokens are server-issued, scoped to one room, and expire after 15 minutes.
-- Redis is private to the Reso Compose network and requires a password.
+- Redis is private to the Ruse Compose network and requires a password.
 - Room creation, join attempts, queue actions, and room mutations are rate-limited.
 - Nginx applies HTTPS redirects, HSTS, `nosniff`, frame protection, referrer policy, permissions policy, and a baseline CSP.
 

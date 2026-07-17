@@ -1,4 +1,4 @@
-# Reso Technical Stack
+# Ruse Technical Stack
 
 | Area | Choice | Purpose |
 | --- | --- | --- |

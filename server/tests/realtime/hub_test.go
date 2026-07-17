@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/subham12r/reso/internal/realtime"
+	"github.com/subham12r/ruse/internal/realtime"
 )
 
 type memoryPresence struct {

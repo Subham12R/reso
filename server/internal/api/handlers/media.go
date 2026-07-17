@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/subham12r/reso/internal/media"
-	"github.com/subham12r/reso/internal/rooms"
+	"github.com/subham12r/ruse/internal/media"
+	"github.com/subham12r/ruse/internal/rooms"
 )
 
 type MediaConfig struct {
@@ -22,12 +22,12 @@ func NewMediaTokenHandler(service *rooms.RoomService, config MediaConfig) http.H
 		}
 
 		roomID := request.PathValue("roomId")
-		cookieNames := []string{"reso_owner_session", "reso_guest_session"}
-		switch request.Header.Get("X-Reso-Session-Role") {
+		cookieNames := []string{"ruse_owner_session", "ruse_guest_session"}
+		switch request.Header.Get("X-Ruse-Session-Role") {
 		case "owner":
-			cookieNames = []string{"reso_owner_session"}
+			cookieNames = []string{"ruse_owner_session"}
 		case "guest":
-			cookieNames = []string{"reso_guest_session"}
+			cookieNames = []string{"ruse_guest_session"}
 		}
 
 		var cookie *http.Cookie

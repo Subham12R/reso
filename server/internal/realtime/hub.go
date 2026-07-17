@@ -78,7 +78,7 @@ func (presence *RedisPresence) Leave(ctx context.Context, roomID, sessionID stri
 	return presence.client.Eval(ctx, `return redis.call('ZREM', KEYS[1], ARGV[1])`, []string{presenceKey(roomID)}, sessionID).Err()
 }
 
-func presenceKey(roomID string) string { return "reso:realtime:presence:" + roomID }
+func presenceKey(roomID string) string { return "ruse:realtime:presence:" + roomID }
 
 type Client struct {
 	RoomID    string

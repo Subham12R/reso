@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/subham12r/reso/internal/media"
-	"github.com/subham12r/reso/internal/realtime"
-	"github.com/subham12r/reso/internal/rooms"
+	"github.com/subham12r/ruse/internal/media"
+	"github.com/subham12r/ruse/internal/realtime"
+	"github.com/subham12r/ruse/internal/rooms"
 )
 
 type createRoomRequest struct {
@@ -124,7 +124,7 @@ func NewRoomHandlerWithCookieSecure(service *rooms.RoomService, cookieSecure boo
 
 func writeCreatedRoom(w http.ResponseWriter, created rooms.CreatedRoom, cookieSecure ...bool) {
 	http.SetCookie(w, &http.Cookie{
-		Name:     "reso_owner_session",
+		Name:     "ruse_owner_session",
 		Value:    created.OwnerSessionToken,
 		Path:     "/",
 		HttpOnly: true,
@@ -147,7 +147,7 @@ func NewApproveJoinRequestHandlerWithCookieSecure(service *rooms.RoomService, co
 			return
 		}
 
-		ownerCookie, err := request.Cookie("reso_owner_session")
+		ownerCookie, err := request.Cookie("ruse_owner_session")
 		if err != nil || ownerCookie.Value == "" {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -185,7 +185,7 @@ func NewGuestJoinStatusHandler(service *rooms.RoomService) http.Handler {
 
 func NewGuestJoinStatusHandlerWithCookieSecure(service *rooms.RoomService, cookieSecure bool) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
-		ticket, err := request.Cookie("reso_join_ticket")
+		ticket, err := request.Cookie("ruse_join_ticket")
 		if err != nil || ticket.Value == "" {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -211,11 +211,11 @@ func generateGuestToken() (string, error) {
 }
 
 func guestJoinTicketCookie(token string, cookieSecure bool) *http.Cookie {
-	return &http.Cookie{Name: "reso_join_ticket", Value: token, Path: "/", HttpOnly: true, Secure: cookieSecure, SameSite: http.SameSiteLaxMode}
+	return &http.Cookie{Name: "ruse_join_ticket", Value: token, Path: "/", HttpOnly: true, Secure: cookieSecure, SameSite: http.SameSiteLaxMode}
 }
 
 func guestSessionCookie(token string, cookieSecure bool) *http.Cookie {
-	return &http.Cookie{Name: "reso_guest_session", Value: token, Path: "/", HttpOnly: true, Secure: cookieSecure, SameSite: http.SameSiteLaxMode}
+	return &http.Cookie{Name: "ruse_guest_session", Value: token, Path: "/", HttpOnly: true, Secure: cookieSecure, SameSite: http.SameSiteLaxMode}
 }
 
 func secureCookie(values []bool) bool {
@@ -229,7 +229,7 @@ func NewRejectJoinRequestHandler(service *rooms.RoomService, hubs ...*realtime.H
 			return
 		}
 
-		ownerCookie, err := request.Cookie("reso_owner_session")
+		ownerCookie, err := request.Cookie("ruse_owner_session")
 		if err != nil || ownerCookie.Value == "" {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -269,7 +269,7 @@ func NewEndRoomHandler(service *rooms.RoomService, hubs ...*realtime.Hub) http.H
 
 func NewEndRoomHandlerWithCleaner(service *rooms.RoomService, cleaner media.RoomCleaner, hubs ...*realtime.Hub) http.Handler {
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		ownerCookie, err := request.Cookie("reso_owner_session")
+		ownerCookie, err := request.Cookie("ruse_owner_session")
 		if err != nil || ownerCookie.Value == "" {
 			http.Error(writer, "unauthorized", http.StatusUnauthorized)
 			return
@@ -300,7 +300,7 @@ type transferStreamHostInput struct {
 
 func NewTransferStreamHostHandler(service *rooms.RoomService, hubs ...*realtime.Hub) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
-		owner, err := request.Cookie("reso_owner_session")
+		owner, err := request.Cookie("ruse_owner_session")
 		if err != nil || owner.Value == "" {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -353,7 +353,7 @@ func NewListPendingJoinRequestsHandler(
 			return
 		}
 
-		ownerCookie, err := request.Cookie("reso_owner_session")
+		ownerCookie, err := request.Cookie("ruse_owner_session")
 		if err != nil || ownerCookie.Value == "" {
 			http.Error(writer, "unauthorized", http.StatusUnauthorized)
 			return

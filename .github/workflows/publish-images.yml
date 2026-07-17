@@ -18,9 +18,9 @@ jobs:
     strategy:
       matrix:
         include:
-          - image: reso-frontend
+          - image: ruse-frontend
             context: frontend
-          - image: reso-api
+          - image: ruse-api
             context: server
     steps:
       - uses: actions/checkout@v4

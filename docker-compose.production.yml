@@ -1,6 +1,6 @@
 services:
   frontend:
-    image: ghcr.io/subham12r/reso-frontend:latest
+    image: ghcr.io/subham12r/ruse-frontend:latest
     depends_on:
       - api
     ports:
@@ -8,7 +8,7 @@ services:
     restart: unless-stopped
 
   api:
-    image: ghcr.io/subham12r/reso-api:latest
+    image: ghcr.io/subham12r/ruse-api:latest
     env_file: .env.production
     environment:
       PORT: "8080"

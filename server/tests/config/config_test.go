@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/subham12r/reso/internal/config"
+	"github.com/subham12r/ruse/internal/config"
 )
 
 func TestLoadReadsRedisURL(t *testing.T) {

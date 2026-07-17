@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
-	"github.com/subham12r/reso/internal/rooms"
+	"github.com/subham12r/ruse/internal/rooms"
 )
 
 func TestRedisStoreRoomAndJoinRequestLifecycle(t *testing.T) {

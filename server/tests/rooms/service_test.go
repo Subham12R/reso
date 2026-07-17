@@ -2,7 +2,7 @@ package rooms_test
 
 import (
 	"errors"
-	"github.com/subham12r/reso/internal/rooms"
+	"github.com/subham12r/ruse/internal/rooms"
 	"testing"
 	"time"
 )

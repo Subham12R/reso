@@ -14,7 +14,7 @@ const instrumentSerif = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Reso | Private watch rooms",
+  title: "Ruse | Private watch rooms",
   description: "Temporary private rooms for sharing a screen and watching together.",
 };
 

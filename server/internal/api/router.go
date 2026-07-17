@@ -11,11 +11,11 @@ import (
 	"unicode/utf8"
 
 	"github.com/redis/go-redis/v9"
-	"github.com/subham12r/reso/internal/api/handlers"
-	"github.com/subham12r/reso/internal/media"
-	"github.com/subham12r/reso/internal/queue"
-	"github.com/subham12r/reso/internal/realtime"
-	"github.com/subham12r/reso/internal/rooms"
+	"github.com/subham12r/ruse/internal/api/handlers"
+	"github.com/subham12r/ruse/internal/media"
+	"github.com/subham12r/ruse/internal/queue"
+	"github.com/subham12r/ruse/internal/realtime"
+	"github.com/subham12r/ruse/internal/rooms"
 )
 
 type RedisClient interface {

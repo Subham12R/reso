@@ -1,7 +1,7 @@
-# Reso — Product Requirements & Technical Design
+# Ruse — Product Requirements & Technical Design
 
 **Document type:** Product Requirements Document (PRD) + high-level technical design  
-**Product:** Reso  
+**Product:** Ruse
 **Version:** 1.0  
 **Status:** Approved direction for V1 planning  
 **Primary platform:** Chromium-based browsers and installable PWA  
@@ -11,11 +11,11 @@
 
 ## 1. Product summary
 
-Reso is a private, temporary watch-room platform that lets a small group of friends share a desktop or browser tab, stream its audio and video in real time, talk through room chat, and watch together without creating accounts.
+Ruse is a private, temporary watch-room platform that lets a small group of friends share a desktop or browser tab, stream its audio and video in real time, talk through room chat, and watch together without creating accounts.
 
 Each room is protected by a short-lived private room code. Rooms are ephemeral: when the session ends, the room code becomes invalid and the associated temporary state is deleted. The platform will support a maximum of three active rooms globally in V1, with up to eight participants per room.
 
-Reso is designed for content that the host is authorized to display or share. It does not provide a content catalogue, content hosting, downloading, recording, DRM circumvention, or rebroadcasting features.
+Ruse is designed for content that the host is authorized to display or share. It does not provide a content catalogue, content hosting, downloading, recording, DRM circumvention, or rebroadcasting features.
 
 ---
 
@@ -23,7 +23,7 @@ Reso is designed for content that the host is authorized to display or share. It
 
 Create the cleanest possible private watch-room experience for small groups:
 
-1. Open Reso.
+1. Open Ruse.
 2. Create a temporary room.
 3. Share the room code privately.
 4. Select a browser tab, application window, or desktop surface.
@@ -146,14 +146,14 @@ A remote team or study group that wants to share a screen and discuss it without
 
 ### Compatibility policy
 
-Reso will use capability detection rather than assuming every capture option is available. The product must clearly communicate:
+Ruse will use capability detection rather than assuming every capture option is available. The product must clearly communicate:
 
 - Whether the selected share source includes audio.
 - Whether the browser exposed desktop or tab audio.
 - Whether the user denied capture permission.
 - Whether a selected source can only provide video.
 
-Reso must never imply that desktop audio can be captured silently or without explicit browser permission.
+Ruse must never imply that desktop audio can be captured silently or without explicit browser permission.
 
 ---
 
@@ -204,9 +204,9 @@ Permissions:
 
 ## 8.1 Create a room
 
-1. User opens Reso.
+1. User opens Ruse.
 2. User selects **Create private room**.
-3. Reso checks the global room capacity atomically.
+3. Ruse checks the global room capacity atomically.
 4. If fewer than three room slots are occupied, a temporary room reservation is created.
 5. User enters a display name.
 6. Backend creates the application room and corresponding LiveKit room.
@@ -217,14 +217,14 @@ Permissions:
 ### Failure state: capacity full
 
 1. User attempts to create a room.
-2. Reso reports that all rooms are occupied.
+2. Ruse reports that all rooms are occupied.
 3. User may join the room-creation queue.
 4. User must keep the tab or PWA open.
 5. Queue position updates in real time.
 
 ## 8.2 Join an existing room
 
-1. User opens Reso.
+1. User opens Ruse.
 2. User enters a room code.
 3. User enters a temporary display name.
 4. Backend validates that the room exists, is open, and has capacity.
@@ -238,7 +238,7 @@ Permissions:
 2. Browser presents the native source picker.
 3. User chooses a browser tab, window, or desktop.
 4. User enables audio in the browser picker when available.
-5. Reso previews the selected source.
+5. Ruse previews the selected source.
 6. User confirms publication.
 7. Stream is published to the room through LiveKit.
 8. All participants receive stream state updates.
@@ -255,7 +255,7 @@ Permissions:
 ## 8.5 End a room
 
 1. Creator selects **End room**.
-2. Reso shows a destructive confirmation.
+2. Ruse shows a destructive confirmation.
 3. Backend marks the room as closing.
 4. Remaining participants receive a room-ended event.
 5. LiveKit room is deleted.
@@ -375,8 +375,8 @@ Requirements:
 - Recommended target bitrate: approximately 3.5 Mbps.
 - Hard client publish ceiling: approximately 5 Mbps.
 - Browser-selected system/tab audio is published as a separate media track where available.
-- Reso does not record the stream.
-- Reso does not transcode the stream in V1.
+- Ruse does not record the stream.
+- Ruse does not transcode the stream in V1.
 
 ## 10.5 Audio controls
 
@@ -464,7 +464,7 @@ Room access must still be verified server-side. Knowing the route alone is not s
 
 ## 12.1 Visual direction
 
-Reso should use:
+Ruse should use:
 
 - Near-black application background.
 - Slightly lighter neutral panels.
@@ -706,15 +706,15 @@ Not stored in V1:
 ## 16.1 Redis keys
 
 ```text
-reso:rooms:active                         SET(roomId)
-reso:room:code:{codeHash}                 STRING(roomId)
-reso:room:{roomId}                        HASH
-reso:room:{roomId}:participants           HASH
-reso:room:{roomId}:banned                 SET(sessionFingerprint)
-reso:queue                                ZSET(joinedAt -> queueSessionId)
-reso:queue:{queueSessionId}               HASH
-reso:reservation:{reservationId}          HASH
-reso:capacity:lock                        distributed lock / Lua-managed state
+ruse:rooms:active                         SET(roomId)
+ruse:room:code:{codeHash}                 STRING(roomId)
+ruse:room:{roomId}                        HASH
+ruse:room:{roomId}:participants           HASH
+ruse:room:{roomId}:banned                 SET(sessionFingerprint)
+ruse:queue                                ZSET(joinedAt -> queueSessionId)
+ruse:queue:{queueSessionId}               HASH
+ruse:reservation:{reservationId}          HASH
+ruse:capacity:lock                        distributed lock / Lua-managed state
 ```
 
 ### Room hash
@@ -1030,9 +1030,9 @@ The server should be tested under TURN-heavy and packet-loss conditions before p
 VPS: 4 vCPU / 8 GB RAM
 
 ├── Reverse proxy
-│   ├── app.reso-domain.tld
-│   ├── api.reso-domain.tld
-│   └── livekit.reso-domain.tld
+│   ├── app.ruse-domain.tld
+│   ├── api.ruse-domain.tld
+│   └── livekit.ruse-domain.tld
 ├── Next.js frontend
 ├── Go API + WebSocket service
 ├── LiveKit server
@@ -1107,7 +1107,7 @@ Track at minimum:
 - Accessible names for icon-only controls.
 - Sufficient colour contrast.
 - Chat announcements should avoid excessive screen-reader interruption.
-- Captions are not generated by Reso in V1, but the UI must not interfere with captions present in shared content.
+- Captions are not generated by Ruse in V1, but the UI must not interfere with captions present in shared content.
 - Reduced-motion preference respected.
 
 ---
@@ -1171,7 +1171,7 @@ Test at least:
 
 ## 27. Acceptance criteria
 
-Reso V1 is ready for release when:
+Ruse V1 is ready for release when:
 
 1. A user can create a room without an account when capacity is available.
 2. A user can join only with a valid active room code.
@@ -1278,6 +1278,6 @@ These are explicitly outside V1 and should not affect the first architecture unl
 
 ## 30. Final product definition
 
-Reso V1 is a Chromium-first, installable private watch-room PWA for a maximum of three simultaneous ephemeral rooms. Each room supports one screen-share host and up to seven viewers, shared-surface audio where browser capabilities allow it, local audio controls, room chat, fullscreen viewing, an in-app floating pinned player, temporary display-name identities, private short-lived codes, host transfer, and automatic cleanup.
+Ruse V1 is a Chromium-first, installable private watch-room PWA for a maximum of three simultaneous ephemeral rooms. Each room supports one screen-share host and up to seven viewers, shared-surface audio where browser capabilities allow it, local audio controls, room chat, fullscreen viewing, an in-app floating pinned player, temporary display-name identities, private short-lived codes, host transfer, and automatic cleanup.
 
 The Next.js client handles interface and capture. A Go backend owns room policy, queueing, capacity, permissions and lifecycle. LiveKit routes media. Redis stores ephemeral state and enforces atomic capacity. PostgreSQL stores only minimal operational records. No login, public discovery, permanent chat history, content hosting or recording is included.

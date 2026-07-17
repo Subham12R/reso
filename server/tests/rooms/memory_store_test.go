@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/subham12r/reso/internal/rooms"
+	"github.com/subham12r/ruse/internal/rooms"
 )
 func TestMemoryStoreFindsRoomByCodeHash(t *testing.T) {
 	store := rooms.NewMemoryStore()

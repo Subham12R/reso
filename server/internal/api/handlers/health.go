@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
-	"github.com/subham12r/reso/internal/services"
+	"github.com/subham12r/ruse/internal/services"
 )
 
 func NewHealthHandler() http.Handler {

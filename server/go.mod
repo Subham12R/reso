@@ -1,4 +1,4 @@
-module github.com/subham12r/reso
+module github.com/subham12r/ruse
 
 go 1.26.4
 

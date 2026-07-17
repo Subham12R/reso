@@ -122,7 +122,7 @@ func rateLimit(next http.Handler, redisClient RedisClient, trustProxyHeaders boo
 			return
 		}
 
-		key := "reso:rate:" + category + ":" + clientIP(r, trustProxyHeaders)
+		key := "ruse:rate:" + category + ":" + clientIP(r, trustProxyHeaders)
 		values, err := redisClient.Eval(r.Context(), rateLimitScript, []string{key}, int64(rateWindow/time.Second)).Slice()
 		if err != nil || len(values) != 2 {
 			http.Error(w, "rate limiter unavailable", http.StatusServiceUnavailable)
